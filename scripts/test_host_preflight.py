@@ -219,6 +219,19 @@ class HostPreflightTests(unittest.TestCase):
         self.assertEqual(result["route"], "single_agent")
         self.assertIn("disabled", result["reason"])
 
+    def test_feature_v2_wins_over_agents_disabled(self):
+        root, session = self.build_host(
+            provider_id="openai",
+            include_provider=False,
+            catalog_version="v1",
+            feature_v2=True,
+            agents_enabled=False,
+            session_version="v2",
+        )
+        result = MOD.inspect_host(root, session)
+        self.assertEqual(result["config_multi_agent_version"], "v2")
+        self.assertEqual(result["route"], "v2_probe")
+
     def test_collab_disabled_without_catalog_routes_single_agent(self):
         root, session = self.build_host(
             provider_id="openai",

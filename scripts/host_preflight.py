@@ -213,12 +213,12 @@ def inspect_host(
 
     config_version: Optional[str] = None
     config_source: Optional[str] = None
-    if agents_enabled is False:
-        config_version = "disabled"
-        config_source = "agents.enabled"
-    elif feature_v2 is True:
+    if feature_v2 is True:
         config_version = "v2"
         config_source = "feature"
+    elif agents_enabled is False:
+        config_version = "disabled"
+        config_source = "agents.enabled"
     elif catalog_version in {"v1", "v2", "disabled"}:
         config_version = catalog_version
         config_source = "catalog"
