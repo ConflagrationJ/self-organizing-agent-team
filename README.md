@@ -1,3 +1,5 @@
+[English](README.md) | [中文](README.zh-CN.md)
+
 # Self-Organizing Agent Team
 
 An agent skill for governed self-organizing delivery: select the smallest team that the task risk justifies, enforce independent review, bind evidence to a revision, and stop before unauthorized external actions.
@@ -18,6 +20,18 @@ The skill answers that with:
 - revision-bound evidence and invalidation on drift;
 - explicit user approval for destructive, networked, published, or otherwise external actions.
 
+## Core invariants and risk routing
+
+This is a summary; `SKILL.md` and `references/` remain authoritative.
+
+| Risk | Team | Required gates |
+|---|---|---|
+| Low | No subagent | Lead implements, rereads the diff, runs relevant tests, records evidence |
+| Medium | Writer + independent reviewer | Code review, tests, revision-bound evidence |
+| High | At most 3 subagents: writer, reviewer, executor | Plan review before writing, code review, independent execution, authorization |
+
+Only the coordinator delegates. Writer and reviewer are different execution units; reviewers are read-only; write scopes are disjoint; high risk stops on revision drift, unauthorized actions, review-time writes, two unresolved rounds, or no measurable progress.
+
 ## Install
 
 Copy this whole directory into a skill location read by the host.
@@ -28,20 +42,7 @@ Codex:
 $CODEX_HOME/skills/self-organizing-agent-team
 ```
 
-DeepSeek Harness with Agent Teams (any of these roots works; a project root is the nearest `.git` ancestor, otherwise the current working directory):
-
-```text
-<project>/.dsh/skills/self-organizing-agent-team
-~/.dsh/skills/self-organizing-agent-team
-~/.agents/skills/self-organizing-agent-team
-```
-
-DSH does not scan `~/.codex/skills`, so a Codex install is not visible to DSH; copy or junction it. The adapter directory also documents the install checks, the Team composition, and the fixed tool expectations.
-
-Invocation policy differs by host:
-
-- Codex reads `agents/openai.yaml`; this release sets `allow_implicit_invocation: false`, so invoke it with `$self-organizing-agent-team`.
-- DSH has no per-skill implicit switch and ignores `agents/openai.yaml`. The skill is model-invocable by default; to force explicit invocation, add `disable-model-invocation: true` to the installed frontmatter and invoke it with `/self-organizing-agent-team`.
+Invocation policy: Codex reads `agents/openai.yaml`; this release sets `allow_implicit_invocation: false`, so invoke it with `$self-organizing-agent-team`.
 
 Enable implicit routing only after independent forward tests.
 
@@ -107,11 +108,6 @@ Failure: writing code before plan review, reviewing your own change, modifying f
 | `scripts/snapshot_worktree.py` | Reproducible `worktree-snapshot:<sha256>` revision for workspaces without a VCS revision |
 | `scripts/test_validate_task_contract.py` | Positive, negative, and manifest validator tests |
 | `scripts/test_forward_scenarios.py` | Structural fixture check for the two forward scenarios |
-| `adapters/deepseek-harness/` | DSH Agent Teams adapter: verified tool mapping, limits, and protocol |
-
-## DeepSeek Harness adapter
-
-The DSH mapping is documented in [adapters/deepseek-harness/README.md](adapters/deepseek-harness/README.md) and [adapters/deepseek-harness/TEAM-PROTOCOL.md](adapters/deepseek-harness/TEAM-PROTOCOL.md). It uses DSH's native Agent Teams tools and does not change the main skill's semantics. It is checked against DSH Desktop 44.7.0 and fixes earlier-draft assumptions about enabling the team, teammate context freshness, task ids, inactivity, and the coexistence of legacy `subagent` tools.
 
 ## Composing with other skills
 
@@ -139,7 +135,7 @@ It cannot determine whether the stated risk is correct, whether a reviewer was g
 
 ## Compatibility and limits
 
-- Delegation primitive names are not hard-coded. Detect what the host provides and record it. On DeepSeek Harness the Agent Teams adapter names the exact tools and forbids mixing Team tools with legacy `subagent` tools.
+- Delegation primitive names are not hard-coded. Detect what the host provides and record it.
 - Host detection must include a method, observed result, evidence locator, timestamp, and a fallback record. When delegation is available, the fallback is recorded as available without being exercised.
 - Without delegation, the skill degrades to one agent plus a fresh verification pass.
 - Nested delegation is disabled by default.

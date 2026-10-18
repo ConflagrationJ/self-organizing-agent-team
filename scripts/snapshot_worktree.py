@@ -24,7 +24,6 @@ from pathlib import Path
 
 EXCLUDED_DIRS = {
     ".git",
-    ".dsh",
     ".venv",
     "venv",
     "__pycache__",

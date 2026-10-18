@@ -9,7 +9,7 @@ Use this skill to choose the smallest safe team for a delivery task, not to crea
 
 ## First: detect host capability
 
-Check which delegation mechanism the current host actually exposes. Do not assume a particular tool name, syntax, or nesting model. If the host ships an adapter, read it before creating anything; for DeepSeek Harness Agent Teams the applicable document is `adapters/deepseek-harness/TEAM-PROTOCOL.md`. Host policy, sandbox, and approval controls always take precedence over this protocol. If no usable delegation mechanism exists:
+Check which delegation mechanism the current host actually exposes. Do not assume a particular tool name, syntax, or nesting model. If the host ships a documented adapter, read it before creating anything. Host policy, sandbox, and approval controls always take precedence over this protocol. If no usable delegation mechanism exists:
 
 1. Run the work as a single agent.
 2. Perform a separate verification pass after implementation: reread the diff, run tests, and record evidence.
@@ -63,8 +63,6 @@ Read only what the current task needs:
 - `references/scheduling-policy.md` for risk classification, dependency rules, budgets, states, and escalation.
 - `references/evidence-and-gates.md` for evidence envelopes and review verdicts.
 - `references/risk-and-authorization.md` for the external-action approval matrix.
-- `adapters/deepseek-harness/TEAM-PROTOCOL.md` when the host is DeepSeek Harness Agent Teams.
-
 Templates:
 
 - `templates/task-contract.md`
