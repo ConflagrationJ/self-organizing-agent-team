@@ -179,8 +179,9 @@ def _repair_hint(
                 else ""
             )
             path_text = str(catalog_path) if catalog_path else "the model catalog"
+            model_label = model or "the selected model"
             hint = (
-                f"{prefix}Back up {path_text}, set the multi_agent_version for {model} "
+                f"{prefix}Back up {path_text}, set the multi_agent_version for {model_label} "
                 "to v1, verify with `codex debug models` and `codex features list`, then "
                 "restart Codex and start a new chat. Existing threads keep their recorded version."
             )
