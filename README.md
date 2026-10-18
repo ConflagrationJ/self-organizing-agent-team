@@ -65,6 +65,14 @@ python scripts/set_invocation_mode.py --check
 
 Changing the policy may require a new Codex chat before the skill metadata is reloaded.
 
+You do not need to edit YAML by hand. Tell the agent any of these:
+
+- "Set self-organizing-agent-team to automatic invocation."
+- "Set self-organizing-agent-team to explicit invocation."
+- "Check the current invocation mode for self-organizing-agent-team."
+
+The agent should run the bundled `scripts/set_invocation_mode.py`, verify the resulting mode, and state that a new chat may be needed for the metadata change to take effect.
+
 ## 30-second usage
 
 1. Classify the task as low, medium, or high risk.

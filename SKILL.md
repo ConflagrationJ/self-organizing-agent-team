@@ -55,6 +55,20 @@ Do not delegate simple edits, read-only questions, or routine test additions mer
 - Stop on any unauthorized external action, review-time write, revision drift, missing approval, or evidence older than the reviewed revision.
 - Escalation choices are limited to splitting the task, replanning, reducing scope, or asking the user.
 
+## Invocation management
+
+When the user asks to change this skill's invocation mode, do not make them edit YAML manually. Run the bundled helper from the installed skill directory and verify the result:
+
+```text
+python scripts/set_invocation_mode.py --mode auto
+python scripts/set_invocation_mode.py --mode explicit
+python scripts/set_invocation_mode.py --check
+```
+
+- `auto` allows implicit selection for matching multi-agent delivery tasks.
+- `explicit` requires `$self-organizing-agent-team`.
+- Report the mode returned by `--check` and warn that a new chat may be required for skill metadata to reload.
+
 ## References
 
 Read only what the current task needs:

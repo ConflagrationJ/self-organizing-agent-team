@@ -65,6 +65,14 @@ python scripts/set_invocation_mode.py --check
 
 切换后可能需要新开 Codex chat，让技能元数据重新加载。
 
+不需要手动编辑 YAML。直接对 Agent 说：
+
+- “把 self-organizing-agent-team 设为自动调用”
+- “把 self-organizing-agent-team 改成仅显式调用”
+- “检查 self-organizing-agent-team 当前调用模式”
+
+Agent 应运行内置的 `scripts/set_invocation_mode.py`，验证结果，并说明可能需要新开 chat 才会重新加载技能元数据。
+
 ## 30 秒使用
 
 1. 把任务分为低、中、高风险。
