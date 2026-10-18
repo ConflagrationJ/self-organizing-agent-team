@@ -46,6 +46,25 @@ $CODEX_HOME/skills/self-organizing-agent-team
 
 只有在独立前向测试后才启用隐式路由。
 
+### 调用模式
+
+唯一配置源是 `agents/openai.yaml`。默认是 `auto`：
+
+```text
+auto       允许隐式调用
+explicit   只能用 $self-organizing-agent-team 显式调用
+```
+
+在已安装的 Skill 目录中切换：
+
+```text
+python scripts/set_invocation_mode.py --mode explicit
+python scripts/set_invocation_mode.py --mode auto
+python scripts/set_invocation_mode.py --check
+```
+
+切换后可能需要新开 Codex chat，让技能元数据重新加载。
+
 ## 30 秒使用
 
 1. 把任务分为低、中、高风险。
@@ -105,6 +124,7 @@ python scripts/test_forward_scenarios.py
 | `references/risk-and-authorization.md` | 外部和不可逆动作的授权矩阵 |
 | `templates/` | 契约、handoff、复核和验收表单 |
 | `scripts/validate_task_contract.py` | 仅做结构校验 |
+| `scripts/set_invocation_mode.py` | 在 `agents/openai.yaml` 中切换 `auto` / `explicit` 调用模式 |
 | `scripts/snapshot_worktree.py` | 为没有 VCS revision 的工作区生成可复现的 `worktree-snapshot:<sha256>` |
 | `scripts/test_validate_task_contract.py` | 正例、反例和 manifest 校验测试 |
 | `scripts/test_forward_scenarios.py` | 两个前向场景的结构 fixture 检查 |

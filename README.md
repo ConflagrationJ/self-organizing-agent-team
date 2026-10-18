@@ -46,6 +46,25 @@ Invocation policy: Codex reads `agents/openai.yaml`; implicit invocation is enab
 
 Enable implicit routing only after independent forward tests.
 
+### Invocation mode
+
+The source of truth is `agents/openai.yaml`. The default is `auto`:
+
+```text
+auto       allow implicit invocation
+explicit   require $self-organizing-agent-team
+```
+
+Switch an installed skill from its directory:
+
+```text
+python scripts/set_invocation_mode.py --mode explicit
+python scripts/set_invocation_mode.py --mode auto
+python scripts/set_invocation_mode.py --check
+```
+
+Changing the policy may require a new Codex chat before the skill metadata is reloaded.
+
 ## 30-second usage
 
 1. Classify the task as low, medium, or high risk.
@@ -105,6 +124,7 @@ Failure: writing code before plan review, reviewing your own change, modifying f
 | `references/risk-and-authorization.md` | Approval matrix for external and irreversible actions |
 | `templates/` | Contract, handoff, review, and acceptance forms |
 | `scripts/validate_task_contract.py` | Structure-only validator |
+| `scripts/set_invocation_mode.py` | Switch `auto` / `explicit` invocation policy in `agents/openai.yaml` |
 | `scripts/snapshot_worktree.py` | Reproducible `worktree-snapshot:<sha256>` revision for workspaces without a VCS revision |
 | `scripts/test_validate_task_contract.py` | Positive, negative, and manifest validator tests |
 | `scripts/test_forward_scenarios.py` | Structural fixture check for the two forward scenarios |
