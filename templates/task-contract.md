@@ -140,8 +140,9 @@ Replace the sample values with values for the current task. Keep exactly one fen
 
 - Risk level is the higher plausible level.
 - `write_scope` contains only project-relative paths.
-- Medium and high risk use an independent reviewer.
+- Medium, high, and max risk use an independent reviewer.
 - High risk requires plan review before writing and independent execution after review.
+- Max risk uses `team.mode: "max_gate"`, adds an `acceptance_reviewer` distinct from the reviewer, and adds a second executor only when it has a disjoint write and run scope.
 - Every external or irreversible action appears in `authorization.requested_actions`.
 - Acceptance items name a command, artifact, or manual check and the evidence required.
 - `delegation_available: true` requires a `detection.probe` whose six booleans are all true: `history_isolated`, `same_child_confirmed`, `workspace_visible`, `initial_task_delivered`, `write_succeeded`, `followup_delivered`.

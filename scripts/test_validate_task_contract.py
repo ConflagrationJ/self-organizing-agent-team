@@ -96,6 +96,7 @@ def high_risk_contract() -> dict:
             "only_coordinator_can_spawn_or_close": True,
             "subagents_may_spawn": False,
             "reviewer_read_only": True,
+        "acceptance_reviewer_read_only": True,
             "author_reviewer_separated": True,
             "roles": ["writer", "reviewer", "executor"],
             "assignments": {
@@ -283,6 +284,7 @@ def medium_risk_contract() -> dict:
         "only_coordinator_can_spawn_or_close": True,
         "subagents_may_spawn": False,
         "reviewer_read_only": True,
+        "acceptance_reviewer_read_only": True,
         "author_reviewer_separated": True,
         "roles": ["writer", "reviewer"],
         "assignments": {
@@ -305,6 +307,55 @@ def medium_risk_contract() -> dict:
     return contract
 
 
+def max_risk_contract() -> dict:
+    contract = high_risk_contract()
+    contract["task_id"] = "TASK-2026-004"
+    contract["task_goal"] = (
+        "Publish a report whose conclusions are computed by the code under review."
+    )
+    contract["risk"] = {
+        "level": "max",
+        "flags": ["network", "external_side_effect", "bulk_change"],
+        "rationale": (
+            "The deliverable is published and mixes executable analysis with claims; "
+            "a correct run can still support a wrong conclusion."
+        ),
+    }
+    contract["team"] = {
+        "mode": "max_gate",
+        "max_agents": 5,
+        "max_parallel": 2,
+        "coordinator": "main",
+        "only_coordinator_can_spawn_or_close": True,
+        "subagents_may_spawn": False,
+        "reviewer_read_only": True,
+        "acceptance_reviewer_read_only": True,
+        "author_reviewer_separated": True,
+        "roles": [
+            "writer",
+            "reviewer",
+            "executor",
+            "executor_secondary",
+            "acceptance_reviewer",
+        ],
+        "assignments": {
+            "writer": "agent-writer",
+            "reviewer": "agent-reviewer",
+            "executor": "agent-executor",
+            "executor_secondary": "agent-executor-shard",
+            "acceptance_reviewer": "agent-acceptance",
+        },
+    }
+    contract["authorization"] = {
+        "approval_required": True,
+        "requested_actions": ["publish-report", "export-raw-sample"],
+        "approved_actions": [],
+        "stop_before_action": True,
+        "note": "Publication and export are blocked until each target is approved.",
+    }
+    return contract
+
+
 def low_risk_contract() -> dict:
     contract = high_risk_contract()
     contract["task_id"] = "TASK-2026-003"
@@ -321,6 +372,7 @@ def low_risk_contract() -> dict:
         "only_coordinator_can_spawn_or_close": True,
         "subagents_may_spawn": False,
         "reviewer_read_only": True,
+        "acceptance_reviewer_read_only": True,
         "author_reviewer_separated": True,
         "roles": [],
         "assignments": {},
@@ -361,6 +413,44 @@ class ValidatorTests(unittest.TestCase):
 
     def test_low_risk_no_team_passes(self) -> None:
         self.assert_valid(low_risk_contract())
+
+    def test_max_risk_max_gate_passes(self) -> None:
+        self.assert_valid(max_risk_contract())
+
+    def test_max_risk_requires_max_gate(self) -> None:
+        contract = max_risk_contract()
+        contract["team"]["mode"] = "full_gate"
+        self.assert_invalid(contract, "max risk requires team.mode=max_gate")
+
+    def test_max_risk_acceptance_reviewer_differs_from_reviewer(self) -> None:
+        contract = max_risk_contract()
+        contract["team"]["assignments"]["acceptance_reviewer"] = "agent-reviewer"
+        self.assert_invalid(
+            contract,
+            "acceptance_reviewer and reviewer must be different execution units",
+        )
+
+    def test_max_risk_executors_must_differ(self) -> None:
+        contract = max_risk_contract()
+        contract["team"]["assignments"]["executor_secondary"] = "agent-executor"
+        self.assert_invalid(
+            contract,
+            "executor and executor_secondary must be different execution units",
+        )
+
+    def test_max_risk_rejects_more_than_six_subagents(self) -> None:
+        contract = max_risk_contract()
+        contract["team"]["max_agents"] = 6
+        self.assert_invalid(contract, "team.max_agents must be between 0 and 5")
+
+    def test_legacy_three_tier_contracts_still_pass(self) -> None:
+        for contract in (
+            low_risk_contract(),
+            medium_risk_contract(),
+            high_risk_contract(),
+        ):
+            with self.subTest(level=contract["risk"]["level"]):
+                self.assert_valid(contract)
 
     def test_missing_task_id_fails(self) -> None:
         contract = high_risk_contract()

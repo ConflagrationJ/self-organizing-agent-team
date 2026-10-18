@@ -122,6 +122,22 @@ The executor runs in an isolated workspace or with a documented equivalent isola
 
 "Tests pass" without the above is not acceptance evidence.
 
+## Result validity gate
+
+Required for medium risk and above whenever the deliverable makes a claim about data, measurements, or conclusions. On Max tasks it is a named acceptance gate with its own execution unit.
+
+A passing execution gate is not a passing result gate. Command, hash, and exit-code evidence prove that something ran; they do not prove that the number means what the deliverable says it means.
+
+The reviewer checks five things:
+
+1. **Same caliber**: numerator and denominator, filters, population, and snapshot time describe the same thing. A coverage rate over one snapshot cannot be paired with a denominator from a newer one.
+2. **Sample bias**: a subgroup with too few samples, or with a non-random selection, cannot carry a comparative conclusion. State the sample size next to every rate.
+3. **Confounding**: before reporting a cross-group difference as an effect, control for composition. If the groups differ in what they contain, the difference is a composition effect until shown otherwise.
+4. **Claim span**: the conclusion must not exceed the evidence. A mention rate is not a requirement; a successful protocol call is not a correct business result; a passing test is not a correct decision; a correlation is not a cause.
+5. **Independent recomputation**: at least one key number is recomputed from the raw data by someone other than its author, and the recomputation is recorded with the command and output.
+
+Findings from this gate use the same severity, trigger, consequence, and verdict shape as other gates. A conclusion that cannot be supported at the current sample size is downgraded or withdrawn; it is not softened into "worth watching".
+
 ## Evidence invalidation
 
 Invalidate evidence when any of these occurs:

@@ -59,13 +59,17 @@ Choose the higher risk level when evidence is mixed. The coordinator may reduce 
 | Low | One local file or one narrow test; no shared interface; reversible | No subagents. The main agent implements and verifies. | Scope check, relevant tests, evidence |
 | Medium | Two or more modules; shared interface; moderate regression risk; reversible | At most 2 subagents: writer plus independent reviewer | Code review, tests, revision-bound evidence |
 | High | Concurrency, locks, permissions, secrets, migrations, network, deletion, publication, payment, production, or other external side effects | At most 3 subagents: writer, independent reviewer, executor | Plan review before writing, code review, independent execution, user authorization for each external action |
+| Max | Irreversible or externally delivered work whose deliverable carries both code and conclusions or data, or work that needs parallel execution or independent acceptance | At most 5 subagents (6 execution units including the coordinator): writer, reviewer, executor, optional second executor, acceptance reviewer | All High gates plus result acceptance (caliber, sample bias, claim span); mutually exclusive execution scopes |
 
 Do not delegate simple edits, read-only questions, or routine test additions merely because this skill was invoked.
+
+Max is not a busier High. The second executor exists for parallel or sharded execution, so the two executors must hold disjoint write scopes and disjoint run scopes and must never write the same artifact. The acceptance reviewer exists for a different failure: code can pass every code gate while the numbers in the deliverable are wrong. Acceptance review and plan review must therefore be different execution units, and the acceptance reviewer must be different from the writer as well.
 
 ## Non-negotiable invariants
 
 - Only the coordinator may create, reassign, or close execution units. On hosts that allow peer messaging and a shared task board, peers may coordinate directly, but the coordinator still owns ownership, closure, and acceptance. Teammates must not create nested execution units.
 - The writer and reviewer are different execution units. The reviewer receives the original task contract, base revision, raw diff or files, and raw logs, not the writer's conclusion first.
+- On Max tasks, the acceptance reviewer is read-only and is a different execution unit from the writer, the reviewer, and both executors. It receives the original acceptance criteria, the deliverable, and the raw data or logs, and it judges execution correctness and conclusion validity separately.
 - Plan reviewers, code reviewers, and monitors are read-only. Any review-time write invalidates the review.
 - Every delegated task has one contract, one task ID, one base revision, and an explicit `write_scope`.
 - Every acceptance claim binds to a revision and an artifact hash or equivalent locator, plus the command, exit code, timestamp, and raw output where applicable.
@@ -75,11 +79,12 @@ Do not delegate simple edits, read-only questions, or routine test additions mer
 
 1. Bind the base revision to a reproducible snapshot (`git rev-parse HEAD`, or `python scripts/snapshot_worktree.py .` when the workspace has no VCS revision), then write the task contract from `templates/task-contract.md`. If the host assigns its own work ids, create the host work item first and use the returned id as `task_id`.
 2. Run the structural validator when a JSON contract block is present.
-3. For high risk, complete plan review before code is written.
+3. For high and max risk, complete plan review before code is written.
 4. Implement only inside `write_scope`.
 5. Complete code review against the exact reviewed revision.
 6. Execute tests or the minimum safe probe from a separate executor.
-7. Record acceptance evidence and any residual risk. Link handoff, acceptance, and artifact hashes through `templates/evidence-manifest.md` when those files exist.
+7. On Max tasks, run result acceptance against the raw data and the stated caliber before recording a pass; a passing execution gate is not a passing result gate.
+8. Record acceptance evidence and any residual risk. Link handoff, acceptance, and artifact hashes through `templates/evidence-manifest.md` when those files exist.
 
 ## Stop rules
 

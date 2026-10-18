@@ -30,9 +30,17 @@ FIELD_COLON_RE = re.compile(
     r"^\s*(?:[-*]\s*)?`?([A-Za-z_][A-Za-z0-9_]*)`?\s*[:=]\s*`?([^`\n]+?)`?\s*$"
 )
 
-RISK_LEVELS = {"low", "medium", "high"}
-TEAM_MODES = {"single_agent", "writer_reviewer", "full_gate"}
-ROLES = {"writer", "reviewer", "executor", "analyst", "monitor"}
+RISK_LEVELS = {"low", "medium", "high", "max"}
+TEAM_MODES = {"single_agent", "writer_reviewer", "full_gate", "max_gate"}
+ROLES = {
+    "writer",
+    "reviewer",
+    "executor",
+    "analyst",
+    "monitor",
+    "acceptance_reviewer",
+    "executor_secondary",
+}
 METHODS = {"command", "artifact", "manual"}
 ESCALATIONS = {"split", "replan", "reduce_scope", "ask_user"}
 PLACEHOLDER_VALUES = {
@@ -226,7 +234,7 @@ def _validate_risk(contract: dict[str, Any], errors: list[str]) -> tuple[str, se
     risk = _mapping(contract, "risk", "risk", errors)
     level = _string(risk, "level", "risk.level", errors)
     if level and level not in RISK_LEVELS:
-        errors.append("risk.level must be low, medium, or high")
+        errors.append("risk.level must be low, medium, high, or max")
     flags = _string_list(risk, "flags", "risk.flags", errors, allow_empty=True)
     unknown = [flag for flag in flags if flag not in RISK_FLAGS and not flag.startswith("custom:")]
     if unknown:
@@ -382,9 +390,14 @@ def _validate_team(
     team = _mapping(contract, "team", "team", errors)
     mode = _string(team, "mode", "team.mode", errors)
     if mode and mode not in TEAM_MODES:
-        errors.append("team.mode must be single_agent, writer_reviewer, or full_gate")
+        errors.append(
+            "team.mode must be single_agent, writer_reviewer, full_gate, or max_gate"
+        )
 
-    max_agents = _integer(team, "max_agents", "team.max_agents", errors, 0, 3)
+    max_agents_limit = 5 if risk_level == "max" else 3
+    max_agents = _integer(
+        team, "max_agents", "team.max_agents", errors, 0, max_agents_limit
+    )
     max_parallel = _integer(team, "max_parallel", "team.max_parallel", errors, 0, 2)
     if max_agents is not None and max_parallel is not None and max_parallel > max_agents:
         errors.append("team.max_parallel must not exceed team.max_agents")
@@ -417,6 +430,14 @@ def _validate_team(
         "team.author_reviewer_separated",
         errors,
     )
+    acceptance_read_only = _boolean(
+        team,
+        "acceptance_reviewer_read_only",
+        "team.acceptance_reviewer_read_only",
+        errors,
+    )
+    if mode == "max_gate" and acceptance_read_only is False:
+        errors.append("team.acceptance_reviewer_read_only must be true for max_gate")
     roles = _string_list(team, "roles", "team.roles", errors, allow_empty=True)
     unknown_roles = [role for role in roles if role not in ROLES]
     if unknown_roles:
@@ -449,9 +470,13 @@ def _validate_team(
     writer = assignments.get("writer", "")
     reviewer = assignments.get("reviewer", "")
     executor = assignments.get("executor", "")
+    executor_secondary = assignments.get("executor_secondary", "")
+    acceptance_reviewer = assignments.get("acceptance_reviewer", "")
     writer_key = writer.casefold()
     reviewer_key = reviewer.casefold()
     executor_key = executor.casefold()
+    executor_secondary_key = executor_secondary.casefold()
+    acceptance_reviewer_key = acceptance_reviewer.casefold()
     coordinator_key = coordinator.casefold()
     if writer and reviewer and writer_key == reviewer_key:
         errors.append("author and reviewer must be different execution units")
@@ -459,7 +484,29 @@ def _validate_team(
         errors.append("executor must be a different execution unit from writer")
     if executor and reviewer and executor_key == reviewer_key:
         errors.append("executor must be a different execution unit from reviewer")
-    for role, value in (("writer", writer), ("reviewer", reviewer), ("executor", executor)):
+    if executor and executor_secondary and executor_key == executor_secondary_key:
+        errors.append("executor and executor_secondary must be different execution units")
+    if acceptance_reviewer and reviewer and acceptance_reviewer_key == reviewer_key:
+        errors.append("acceptance_reviewer and reviewer must be different execution units")
+    if acceptance_reviewer and writer and acceptance_reviewer_key == writer_key:
+        errors.append("acceptance_reviewer must be a different execution unit from writer")
+    if acceptance_reviewer and executor and acceptance_reviewer_key == executor_key:
+        errors.append("acceptance_reviewer must be a different execution unit from executor")
+    if (
+        acceptance_reviewer
+        and executor_secondary
+        and acceptance_reviewer_key == executor_secondary_key
+    ):
+        errors.append(
+            "acceptance_reviewer must be a different execution unit from executor_secondary"
+        )
+    for role, value in (
+        ("writer", writer),
+        ("reviewer", reviewer),
+        ("executor", executor),
+        ("executor_secondary", executor_secondary),
+        ("acceptance_reviewer", acceptance_reviewer),
+    ):
         if value and coordinator_key and value.casefold() == coordinator_key:
             errors.append(f"team.assignments.{role} must not equal the coordinator")
 
@@ -506,6 +553,25 @@ def _validate_team(
                 errors.append(f"high risk requires a team.assignments entry for {role}")
         if separated is False:
             errors.append("high risk requires author-reviewer separation")
+    elif risk_level == "max":
+        if mode != "max_gate":
+            errors.append("max risk requires team.mode=max_gate")
+
+    if mode == "max_gate":
+        if not {
+            "writer",
+            "reviewer",
+            "executor",
+            "acceptance_reviewer",
+        }.issubset(roles):
+            errors.append(
+                "max_gate requires writer, reviewer, executor, and acceptance_reviewer roles"
+            )
+        for role in ("writer", "reviewer", "executor", "acceptance_reviewer"):
+            if role not in assignments:
+                errors.append(f"max_gate requires a team.assignments entry for {role}")
+        if separated is False:
+            errors.append("max_gate requires author-reviewer separation")
 
     return max_agents, assignments
 
@@ -546,6 +612,13 @@ def _validate_gates(
             errors.append("high risk requires code_review=true")
         if independent is not True:
             errors.append("high risk requires independent_execution=true")
+    elif risk_level == "max":
+        if plan_review is not True:
+            errors.append("max risk requires plan_review=true before writing")
+        if code_review is not True:
+            errors.append("max risk requires code_review=true")
+        if independent is not True:
+            errors.append("max risk requires independent_execution=true")
 
 
 def _validate_acceptance(contract: dict[str, Any], risk_level: str, errors: list[str]) -> None:
@@ -577,8 +650,10 @@ def _validate_acceptance(contract: dict[str, Any], risk_level: str, errors: list
             errors.append(f"acceptance[{index}].command must be a string when present")
         _string(item, "evidence", f"acceptance[{index}].evidence", errors)
 
-    if risk_level == "high" and command_count == 0:
-        errors.append("high risk requires at least one command-based acceptance item")
+    if risk_level in {"high", "max"} and command_count == 0:
+        errors.append(
+            f"{risk_level} risk requires at least one command-based acceptance item"
+        )
 
 
 def _validate_authorization(

@@ -56,6 +56,21 @@ Any of the following is true:
 
 Routing: at most three subagents: writer, independent reviewer, executor. The reviewer performs plan review before implementation and code review after implementation.
 
+### Max
+
+Any of the following is true:
+
+- the deliverable is irreversible or externally delivered, and it carries both code and conclusions or data;
+- the work needs parallel or sharded execution to fit its budget;
+- the result needs independent acceptance because a correct execution can still produce a wrong conclusion;
+- a prior High-risk run passed every code gate and still shipped a wrong number or an unsupported claim.
+
+Routing: at most five subagents (six execution units including the coordinator): writer, reviewer, executor, optional second executor, acceptance reviewer. The reviewer performs plan review before implementation and code review after implementation; the acceptance reviewer judges the result separately and is never the same execution unit as the reviewer, the writer, or either executor.
+
+Max is not a busier High. Add the second executor only for parallel or sharded work; add the acceptance reviewer only when the deliverable makes a claim that execution evidence cannot settle. A Max task without either condition is still a High task.
+
+On a host where delegation is unavailable, Max cannot be expressed: `delegation_available: false` requires `single_agent`, while Max requires `max_gate`. Downgrade the task to High and record the fallback explicitly; do not silently drop the acceptance reviewer while keeping the Max label.
+
 ## Dependency and concurrency rules
 
 - Build a lightweight dependency graph before delegating.
@@ -63,7 +78,7 @@ Routing: at most three subagents: writer, independent reviewer, executor. The re
 - Writes that share a path must be serialized.
 - Reviewer work depends on a frozen implementation revision.
 - Execution depends on an approved code review.
-- Default maximum: three subagents total and two running in parallel.
+- Default maximum: three subagents total and two running in parallel; a Max task may raise the total to five subagents (six execution units including the coordinator) but never the parallel count to more than two.
 - No unbounded fan-out and no recursive delegation by subagents.
 
 ## Write-scope rules

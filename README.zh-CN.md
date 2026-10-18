@@ -13,7 +13,7 @@
 这个 Skill 用以下机制回答这个问题：
 
 - 风险路由 rubric；
-- 最多三个 subagent、两个并行 Agent 的硬上限；
+- 最多三个 subagent 的硬上限，仅 MAX 档可放到五个（含主 agent 共六个执行单元）；并行 Agent 上限仍为两个；
 - 一个拥有独占委派权的 coordinator；
 - 只读 reviewer 与互斥 write scope；
 - 高风险任务在写代码前完成方案复核；
@@ -29,8 +29,11 @@
 | 低 | 无 subagent | Lead 实现、重读 diff、运行相关测试并记录证据 |
 | 中 | writer + 独立 reviewer | 代码复核、测试、绑定 revision 的证据 |
 | 高 | 最多 3 个 subagent：writer、reviewer、executor | 写代码前方案复核、代码复核、独立执行、授权 |
+| MAX | 最多 5 个 subagent（含主 agent 共 6 个执行单元）：writer、reviewer、executor、可选第二执行、成果验收 | 高风险全部 gate + 成果验收，两个执行范围互斥 |
 
-只有 coordinator 可以委派。writer 和 reviewer 是不同执行单元；reviewer 只读；write scope 互斥；高风险遇到 revision 漂移、未授权动作、复核期间写入、两轮未收敛或没有可衡量进展时停止。
+MAX 不是“更忙的高风险”：第二执行者只用于并行或分片，成果验收只用来解决“代码全绿、结论却错”这一类问题。成果验收与方案复核必须是两个不同执行单元。
+
+只有 coordinator 可以委派。writer 和 reviewer 是不同执行单元；reviewer 只读；write scope 互斥；高风险与 MAX 遇到 revision 漂移、未授权动作、复核期间写入、两轮未收敛或没有可衡量进展时停止。
 
 ## 安装
 
@@ -63,11 +66,11 @@ Agent 会运行 `scripts/set_invocation_mode.py` 并回报结果。切换后可�
 
 1. 先运行 `python <skill-dir>/scripts/host_preflight.py`，读取当前宿主的路由结论；它不会修改任何配置。
 2. 第一次委派前再跑 `templates/delegation-probe.md` 的投递探针，必须关闭历史继承；把两个 token、两个路径和六项状态记进契约。
-3. 把任务分为低、中、高风险。
+3. 把任务分为低、中、高、MAX 风险。
 4. 低风险、预检为 `single_agent` 或探针失败时，使用单 Agent，并做一次独立验证。
 5. 其他情况复制 `templates/task-contract.md`，填写 task ID、base revision、write scope、gate、验收检查和授权请求。
 6. 运行 `python scripts/validate_task_contract.py path/to/contract.md` 做结构检查。存在 handoff 和 acceptance 文件时，加上 `--manifest path/to/evidence-manifest.md`。
-7. 按顺序执行 gate：方案复核（仅高风险）、实现、代码复核、独立执行、验收。
+7. 按顺序执行 gate：方案复核（高风险与 MAX）、实现、代码复核、独立执行、成果验收（MAX）、验收。
 8. 遇到 revision 漂移、未授权动作、复核期间写入、两轮未收敛或没有可衡量进展时停止。
 
 ## 前向测试验收场景（尚未执行）
@@ -159,7 +162,7 @@ python scripts/validate_task_contract.py path/to/contract.md --manifest path/to/
 - 探针通过时 fallback 记为 `available`；只有真的跑过单 Agent 验证，才记 `exercised`。
 - 没有委派能力时，降级为一个 Agent 加一次新的验证 pass。
 - 默认禁用嵌套委派。
-- 默认最多三个 subagent、两个并行 subagent。
+- 默认最多三个 subagent、两个并行 subagent；MAX 档可把 subagent 总数放到五个，但不放宽并行数。
 - 契约未给值时，默认每个 Agent 30 分钟、总计 90 分钟、两轮无进展停止。
 - 本版本不声称生产部署经验、企业结果或自主运行能力。
 

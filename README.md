@@ -13,7 +13,7 @@ Adding more agents can make a task slower and less reliable. The useful question
 The skill answers that with:
 
 - risk-routing rubric;
-- a hard cap of three subagents and two parallel agents;
+- a hard cap of three subagents, raised to six only for max-risk work, and two parallel agents;
 - one coordinator with exclusive delegation authority;
 - read-only reviewers and mutually exclusive write scopes;
 - plan review before code for high-risk work;
@@ -29,8 +29,11 @@ This is a summary; `SKILL.md` and `references/` remain authoritative.
 | Low | No subagent | Lead implements, rereads the diff, runs relevant tests, records evidence |
 | Medium | Writer + independent reviewer | Code review, tests, revision-bound evidence |
 | High | At most 3 subagents: writer, reviewer, executor | Plan review before writing, code review, independent execution, authorization |
+| Max | At most 5 subagents (6 execution units including the coordinator): writer, reviewer, executor, optional second executor, acceptance reviewer | All high-risk gates plus result acceptance, with disjoint execution scopes |
 
-Only the coordinator delegates. Writer and reviewer are different execution units; reviewers are read-only; write scopes are disjoint; high risk stops on revision drift, unauthorized actions, review-time writes, two unresolved rounds, or no measurable progress.
+Max is not a busier high-risk run: the second executor exists for parallel or sharded work, and the acceptance reviewer exists because code can pass every code gate while the numbers in the deliverable are wrong. Acceptance review and plan review are different execution units.
+
+Only the coordinator delegates. Writer and reviewer are different execution units; reviewers are read-only; write scopes are disjoint; high and max risk stop on revision drift, unauthorized actions, review-time writes, two unresolved rounds, or no measurable progress.
 
 ## Install
 
@@ -63,11 +66,11 @@ The agent runs `scripts/set_invocation_mode.py` and reports the result. A new ch
 
 1. Run `python <skill-dir>/scripts/host_preflight.py` to read the current host route without changing configuration.
 2. Run the delegation probe from `templates/delegation-probe.md` before the first delegated task, with history inheritance disabled. Record both tokens, both paths, and the six probe states in the contract.
-3. Classify the task as low, medium, or high risk.
+3. Classify the task as low, medium, high, or max risk.
 4. If low risk, `single_agent` from preflight, or the probe failed, use one agent and an independent verification pass.
 5. Otherwise copy `templates/task-contract.md`, set the task ID, base revision, write scope, gates, acceptance checks, and authorization requests.
 6. Run `python scripts/validate_task_contract.py path/to/contract.md` as a structure check. Add `--manifest path/to/evidence-manifest.md` when handoff and acceptance files exist.
-7. Run the gates in order: plan review (high risk only), implementation, code review, independent execution, acceptance.
+7. Run the gates in order: plan review (high and max risk), implementation, code review, independent execution, result acceptance (max risk), acceptance.
 8. Stop on revision drift, unauthorized action, review-time writes, two unresolved rounds, or no measurable progress.
 
 ## Forward-test acceptance scenarios (not executed)
@@ -159,7 +162,7 @@ It cannot determine whether the stated risk is correct, whether a reviewer was g
 - The fallback record stays `available` when delegation passes the probe. Record `exercised` only after the single-agent verification pass actually ran.
 - Without delegation, the skill degrades to one agent plus a fresh verification pass.
 - Nested delegation is disabled by default.
-- The default maximum is three subagents and two parallel subagents.
+- The default maximum is three subagents and two parallel subagents; max-risk work may raise the subagent total to six but not the parallel count.
 - Defaults, when a contract does not choose values, are 30 minutes per agent, 90 minutes total, and two no-progress rounds.
 - This release does not claim production deployment experience, enterprise results, or autonomous operation.
 
