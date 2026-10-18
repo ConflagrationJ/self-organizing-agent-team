@@ -28,11 +28,25 @@ Replace the sample values with values for the current task. Keep exactly one fen
     "single_agent_fallback": true,
     "adapter": "host-delegation-v1",
     "detection": {
-      "method": "runtime capability probe via host tool discovery",
-      "observed": "delegation primitives are present in the current host",
-      "evidence": "probe-host-capabilities.log#L1",
+      "method": "round-trip nonce probe through the host delegation tools",
+      "observed": "spawn ran with history inheritance disabled, the child wrote the sha256 token digest, and follow-up reached the same child",
+      "evidence": "probe-delegation.log#L1-L24",
       "timestamp": "2026-10-18T12:00:00Z",
-      "result": "available"
+      "result": "available",
+      "probe": {
+        "history_isolated": true,
+        "same_child_confirmed": true,
+        "workspace_visible": true,
+        "initial_task_delivered": true,
+        "write_succeeded": true,
+        "followup_delivered": true,
+        "token_a": "PROBEA7F3C1A9D2B",
+        "token_b": "PROBEB2E48B6C1F7",
+        "file_a": ".sot-tmp/probe-delegation-alpha.txt",
+        "file_b": ".sot-tmp/probe-delegation-beta.txt",
+        "evidence": "probe-delegation.log#L1-L24",
+        "timestamp": "2026-10-18T12:00:00Z"
+      }
     },
     "fallback": {
       "method": "single-agent verification path",
@@ -130,3 +144,8 @@ Replace the sample values with values for the current task. Keep exactly one fen
 - High risk requires plan review before writing and independent execution after review.
 - Every external or irreversible action appears in `authorization.requested_actions`.
 - Acceptance items name a command, artifact, or manual check and the evidence required.
+- `delegation_available: true` requires a `detection.probe` whose six booleans are all true: `history_isolated`, `same_child_confirmed`, `workspace_visible`, `initial_task_delivered`, `write_succeeded`, `followup_delivered`.
+- `probe.history_isolated` requires the probe to run with history inheritance disabled. An inherited parent history can contain `token_a`, which makes a fresh child look like it received the task.
+- `probe.same_child_confirmed` requires the follow-up to land on the child that wrote `file_a`, proven by a value only that child knows.
+- `probe.token_a` and `probe.token_b` must differ, and `probe.file_a` and `probe.file_b` must differ, so a cached or invented reply cannot pass.
+- The probe carries its own `evidence` locator and `timestamp`, in addition to the detection record's.

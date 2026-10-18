@@ -30,6 +30,31 @@ Requirements:
 - For a manual check, describe who checked what and attach a reproducible artifact when possible.
 - Evidence from an older revision cannot approve a newer revision.
 
+## Delegation probe evidence
+
+Before the first delegated task, run the probe in `templates/delegation-probe.md` and record the result under `host_capabilities.detection.probe`.
+
+The probe records six states. They are not six independent experiments:
+
+- `history_isolated` says the child ran without the parent thread for the initial spawn and for any child the follow-up creates, so an inherited spawn call or transcript cannot supply the token;
+- `same_child_confirmed` says the follow-up reached the child that wrote the first file, proven by a value that is not recoverable from the workspace. It holds only when `history_isolated` also holds; otherwise the value can come from the inherited transcript;
+- `workspace_visible`, `initial_task_delivered`, and `write_succeeded` come from one round trip. The file check is joint evidence that delivery, execution, and write held together in that round. Do not report it as three independent conclusions, and do not reuse it for a later round. Delivery is attributed from the child's reply; the write is attributed from the file, so a greeting with no file fails both and a permission error with no file fails only the write;
+- `followup_delivered` is the second round trip and carries its own artifact.
+
+The evidence is the file the child wrote, read back by the coordinator, compared byte for byte after newline normalization, plus the reply that names the token. A spawn return value, an agent id, a task name, a nickname, or a child summary is not evidence.
+
+It does not prove that later messages arrive, that a long prompt survives truncation, that a different child on the same host behaves the same way, or that any reviewer is independent. A passing probe is an entrance ticket for this host build.
+
+Invalidate the probe when any of these occurs:
+
+- the host build changes;
+- the model or provider changes;
+- the adapter or delegation configuration changes;
+- the session restarts, or history inheritance is re-enabled;
+- a real child answers with a generic greeting or a workspace summary, which means retest immediately rather than continue the task.
+
+A failed probe is recorded, not deleted. Keep the measured values, name the failing stage, set `delegation_available: false`, and fall back to the single-agent path with a separate verification pass.
+
 ## Gate outputs
 
 Every review gate returns exactly one verdict:

@@ -50,6 +50,19 @@ PLACEHOLDER_VALUES = {
 }
 CAPABILITY_RESULTS = {"available", "unavailable", "exercised"}
 
+PROBE_BOOLEAN_KEYS = (
+    "history_isolated",
+    "same_child_confirmed",
+    "workspace_visible",
+    "initial_task_delivered",
+    "write_succeeded",
+    "followup_delivered",
+)
+PROBE_TOKEN_KEYS = ("token_a", "token_b")
+PROBE_FILE_KEYS = ("file_a", "file_b")
+PROBE_TEXT_KEYS = PROBE_TOKEN_KEYS + PROBE_FILE_KEYS + ("evidence", "timestamp")
+PROBE_TOKEN_RE = re.compile(r"^[A-Z0-9]{8,64}$")
+
 RISK_FLAGS = {
     "concurrency",
     "locks",
@@ -240,6 +253,72 @@ def _validate_capability_record(
     return result
 
 
+def _validate_delegation_probe(
+    detection: dict[str, Any],
+    label: str,
+    available: bool | None,
+    errors: list[str],
+) -> None:
+    probe = detection.get("probe")
+    if probe is None:
+        if available is True:
+            errors.append(f"{label}.probe is required when delegation_available=true")
+        return
+    if not isinstance(probe, dict):
+        errors.append(f"{label}.probe must be an object")
+        return
+
+    if available is True:
+        for key in PROBE_BOOLEAN_KEYS:
+            if probe.get(key) is not True:
+                errors.append(
+                    f"{label}.probe.{key} must be true when delegation_available=true"
+                )
+    else:
+        for key in PROBE_BOOLEAN_KEYS:
+            if key in probe and not isinstance(probe[key], bool):
+                errors.append(f"{label}.probe.{key} must be a boolean")
+
+    values: dict[str, str] = {}
+    for key in PROBE_TEXT_KEYS:
+        if key not in probe:
+            if available is True:
+                errors.append(f"{label}.probe.{key} must be a non-empty string")
+            continue
+        raw = probe[key]
+        if not isinstance(raw, str) or not raw.strip():
+            errors.append(f"{label}.probe.{key} must be a non-empty string")
+            continue
+        value = raw.strip()
+        if _is_placeholder(value):
+            errors.append(f"{label}.probe.{key} must not be a placeholder")
+        values[key] = value
+
+    if available is not True:
+        return
+
+    for key in PROBE_TOKEN_KEYS:
+        value = values.get(key, "")
+        if value and not PROBE_TOKEN_RE.fullmatch(value):
+            errors.append(f"{label}.probe.{key} must match ^[A-Z0-9]{{8,64}}$")
+    for key in PROBE_FILE_KEYS:
+        value = values.get(key, "")
+        if value and not _safe_relative_path(value):
+            errors.append(
+                f"{label}.probe.{key} must be a project-relative path "
+                "without traversal or globs"
+            )
+
+    token_a = values.get("token_a", "")
+    token_b = values.get("token_b", "")
+    if token_a and token_b and token_a == token_b:
+        errors.append(f"{label}.probe.token_b must differ from {label}.probe.token_a")
+    file_a = values.get("file_a", "")
+    file_b = values.get("file_b", "")
+    if file_a and file_b and file_a == file_b:
+        errors.append(f"{label}.probe.file_b must differ from {label}.probe.file_a")
+
+
 def _validate_host(contract: dict[str, Any], errors: list[str]) -> bool | None:
     host = _mapping(contract, "host_capabilities", "host_capabilities", errors)
     available = _boolean(
@@ -268,6 +347,14 @@ def _validate_host(contract: dict[str, Any], errors: list[str]) -> bool | None:
         {"available", "unavailable"},
         errors,
     )
+    detection = host.get("detection")
+    if isinstance(detection, dict):
+        _validate_delegation_probe(
+            detection,
+            "host_capabilities.detection",
+            available,
+            errors,
+        )
     fallback_result = _validate_capability_record(
         host,
         "fallback",

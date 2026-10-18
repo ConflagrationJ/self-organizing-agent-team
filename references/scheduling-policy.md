@@ -6,7 +6,7 @@ Public skills must not assume a specific delegation API. Inspect the current hos
 
 Record one of these outcomes in the task contract:
 
-- `delegation_available: true` with a `detection` record containing method, observed result, evidence locator, timestamp, and `result=available`;
+- `delegation_available: true` with a `detection` record containing method, observed result, evidence locator, timestamp, `result=available`, and a `probe` block from `templates/delegation-probe.md` whose six states are true, including `history_isolated` and `same_child_confirmed`, with distinct tokens, distinct paths, and its own evidence locator and timestamp;
 - `delegation_available: false` with `detection.result=unavailable` and `fallback.result=exercised`;
 - always include a `fallback` record with method, observed result, evidence locator, timestamp, and result.
 

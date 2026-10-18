@@ -60,11 +60,25 @@ def high_risk_contract() -> dict:
             "single_agent_fallback": True,
             "adapter": "host-delegation-v1",
             "detection": {
-                "method": "runtime capability probe via host tool discovery",
-                "observed": "delegation primitives are present in the current host",
-                "evidence": "probe-host-capabilities.log#L1",
+                "method": "round-trip nonce probe through the host delegation tools",
+                "observed": "spawn ran with history inheritance disabled, the child wrote the sha256 token digest, and follow-up reached the same child",
+                "evidence": "probe-host-capabilities.log#L1-L24",
                 "timestamp": "2026-10-18T12:00:00Z",
                 "result": "available",
+                "probe": {
+                    "history_isolated": True,
+                    "same_child_confirmed": True,
+                    "workspace_visible": True,
+                    "initial_task_delivered": True,
+                    "write_succeeded": True,
+                    "followup_delivered": True,
+                    "token_a": "PROBEA7F3C1A9D2B",
+                    "token_b": "PROBEB2E48B6C1F7",
+                    "file_a": ".sot-tmp/probe-delegation-alpha.txt",
+                    "file_b": ".sot-tmp/probe-delegation-beta.txt",
+                    "evidence": "probe-host-capabilities.log#L1-L24",
+                    "timestamp": "2026-10-18T12:00:00Z",
+                },
             },
             "fallback": {
                 "method": "single-agent verification path",
@@ -171,7 +185,34 @@ def manifest_fixture(root: Path, contract: dict, executed_revision: str | None =
         + contract["base_rev"]
         + "` |\n| `decision` | `pass` |\n"
     )
-    probe_text = "probe: delegation available\n"
+    probe_lines = [
+        "2026-10-18T12:00:00Z tool=spawn args=agent=probe-a,history=none",
+        "2026-10-18T12:00:00Z args=token=PROBEA7F3C1A9D2B,file_a=.sot-tmp/probe-delegation-alpha.txt",
+        "2026-10-18T12:00:00Z return=task_name=probe-a,nickname=fixture-child",
+        "2026-10-18T12:00:01Z child=probe-a tool=hash args=algorithm=sha256,token=PROBEA7F3C1A9D2B",
+        "2026-10-18T12:00:02Z child=probe-a write=file_a bytes=64",
+        "2026-10-18T12:00:03Z child=probe-a reply=PROBEA7F3C1A9D2B",
+        "2026-10-18T12:00:04Z file_a exists=true sha256=<file digest>",
+        "2026-10-18T12:00:04Z file_a content_matches_digest=true",
+        "2026-10-18T12:00:05Z file_a trailing_newline=absent",
+        "2026-10-18T12:00:05Z tool=followup args=agent=probe-a",
+        "2026-10-18T12:00:05Z args=token_b=PROBEB2E48B6C1F7,file_b=.sot-tmp/probe-delegation-beta.txt",
+        "2026-10-18T12:00:06Z return=accepted",
+        "2026-10-18T12:00:07Z child=probe-a write=file_b",
+        "2026-10-18T12:00:08Z child=probe-a delete=file_a",
+        "2026-10-18T12:00:08Z file_b exists=true",
+        "2026-10-18T12:00:09Z file_b content=PROBEA7F3C1A9D2B:PROBEB2E48B6C1F7",
+        "2026-10-18T12:00:09Z file_b content_matches=true",
+        "2026-10-18T12:00:09Z file_a exists=false",
+        "2026-10-18T12:00:10Z state history_isolated=true same_child_confirmed=true",
+        "2026-10-18T12:00:10Z state workspace_visible=true initial_task_delivered=true",
+        "2026-10-18T12:00:10Z state write_succeeded=true followup_delivered=true",
+        "2026-10-18T12:00:10Z token_binding=sha256(token_a)",
+        "2026-10-18T12:00:11Z cleanup files_deleted=true",
+        "2026-10-18T12:00:11Z result=available stages=6",
+    ]
+    probe_text = "\n".join(probe_lines) + "\n"
+    assert len(probe_lines) == 24, "probe fixture must cover the #L1-L24 locator"
     fallback_text = "fallback: main agent verified\n"
     artifact_text = "fixture artifact\n"
     (root / "handoff.md").write_text(handoff_text, encoding="utf-8")
@@ -417,6 +458,83 @@ class ValidatorTests(unittest.TestCase):
         contract = high_risk_contract()
         contract["host_capabilities"]["detection"]["evidence"] = "runtime-detected"
         self.assert_invalid(contract, "detection.evidence must not be a placeholder")
+
+    def test_delegation_probe_missing_fails(self) -> None:
+        contract = high_risk_contract()
+        del contract["host_capabilities"]["detection"]["probe"]
+        self.assert_invalid(contract, "detection.probe is required when delegation_available=true")
+
+    def test_delegation_probe_write_failure_fails(self) -> None:
+        contract = high_risk_contract()
+        contract["host_capabilities"]["detection"]["probe"]["write_succeeded"] = False
+        self.assert_invalid(
+            contract,
+            "detection.probe.write_succeeded must be true when delegation_available=true",
+        )
+
+    def test_delegation_probe_identical_tokens_fails(self) -> None:
+        contract = high_risk_contract()
+        probe = contract["host_capabilities"]["detection"]["probe"]
+        probe["token_b"] = probe["token_a"]
+        self.assert_invalid(contract, "probe.token_b must differ from")
+
+    def test_delegation_probe_placeholder_token_fails(self) -> None:
+        contract = high_risk_contract()
+        contract["host_capabilities"]["detection"]["probe"]["token_a"] = "placeholder"
+        self.assert_invalid(contract, "detection.probe.token_a must not be a placeholder")
+
+    def test_failed_delegation_probe_may_be_recorded(self) -> None:
+        contract = low_risk_contract()
+        host = contract["host_capabilities"]
+        host["delegation_available"] = False
+        host["detection"]["result"] = "unavailable"
+        host["detection"]["observed"] = (
+            "spawn accepted but the child replied with a greeting and wrote no file"
+        )
+        host["detection"]["probe"]["initial_task_delivered"] = False
+        host["detection"]["probe"]["write_succeeded"] = False
+        host["fallback"]["result"] = "exercised"
+        self.assert_valid(contract)
+
+    def test_delegation_probe_history_inheritance_fails(self) -> None:
+        contract = high_risk_contract()
+        contract["host_capabilities"]["detection"]["probe"]["history_isolated"] = False
+        self.assert_invalid(
+            contract,
+            "detection.probe.history_isolated must be true when delegation_available=true",
+        )
+
+    def test_delegation_probe_new_child_fails(self) -> None:
+        contract = high_risk_contract()
+        contract["host_capabilities"]["detection"]["probe"]["same_child_confirmed"] = False
+        self.assert_invalid(
+            contract,
+            "detection.probe.same_child_confirmed must be true when delegation_available=true",
+        )
+
+    def test_delegation_probe_file_traversal_fails(self) -> None:
+        contract = high_risk_contract()
+        contract["host_capabilities"]["detection"]["probe"]["file_a"] = "../escape.txt"
+        self.assert_invalid(
+            contract,
+            "detection.probe.file_a must be a project-relative path",
+        )
+
+    def test_delegation_probe_duplicate_files_fails(self) -> None:
+        contract = high_risk_contract()
+        probe = contract["host_capabilities"]["detection"]["probe"]
+        probe["file_b"] = probe["file_a"]
+        self.assert_invalid(contract, "probe.file_b must differ from")
+
+    def test_delegation_probe_short_token_fails(self) -> None:
+        contract = high_risk_contract()
+        contract["host_capabilities"]["detection"]["probe"]["token_a"] = "SHORT"
+        self.assert_invalid(contract, "detection.probe.token_a must match")
+
+    def test_delegation_probe_non_object_fails(self) -> None:
+        contract = high_risk_contract()
+        contract["host_capabilities"]["detection"]["probe"] = "available"
+        self.assert_invalid(contract, "detection.probe must be an object")
 
     def test_manifest_matching_hashes_passes(self) -> None:
         contract = high_risk_contract()

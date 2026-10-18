@@ -61,12 +61,13 @@ Agent 会运行 `scripts/set_invocation_mode.py` 并回报结果。切换后可�
 
 ## 30 秒使用
 
-1. 把任务分为低、中、高风险。
-2. 低风险或没有委派能力时，使用单 Agent，并做一次独立验证。
-3. 其他情况复制 `templates/task-contract.md`，填写 task ID、base revision、write scope、gate、验收检查和授权请求。
-4. 运行 `python scripts/validate_task_contract.py path/to/contract.md` 做结构检查。存在 handoff 和 acceptance 文件时，加上 `--manifest path/to/evidence-manifest.md`。
-5. 按顺序执行 gate：方案复核（仅高风险）、实现、代码复核、独立执行、验收。
-6. 遇到 revision 漂移、未授权动作、复核期间写入、两轮未收敛或没有可衡量进展时停止。
+1. 第一次委派前先跑 `templates/delegation-probe.md` 的投递探针，必须关闭历史继承；把两个 token、两个路径和六项状态记进契约。
+2. 把任务分为低、中、高风险。
+3. 低风险或探针失败时，使用单 Agent，并做一次独立验证。
+4. 其他情况复制 `templates/task-contract.md`，填写 task ID、base revision、write scope、gate、验收检查和授权请求。
+5. 运行 `python scripts/validate_task_contract.py path/to/contract.md` 做结构检查。存在 handoff 和 acceptance 文件时，加上 `--manifest path/to/evidence-manifest.md`。
+6. 按顺序执行 gate：方案复核（仅高风险）、实现、代码复核、独立执行、验收。
+7. 遇到 revision 漂移、未授权动作、复核期间写入、两轮未收敛或没有可衡量进展时停止。
 
 ## 前向测试验收场景（尚未执行）
 
@@ -117,6 +118,8 @@ python scripts/test_forward_scenarios.py
 | `references/evidence-and-gates.md` | 证据 envelope 与复核结论 |
 | `references/risk-and-authorization.md` | 外部和不可逆动作的授权矩阵 |
 | `templates/` | 契约、handoff、复核和验收表单 |
+| `templates/delegation-probe.md` | 关闭历史继承的宿主委派往返投递探针 |
+| `adapters/` | 宿主专属说明，含已知委派缺陷 |
 | `scripts/validate_task_contract.py` | 仅做结构校验 |
 | `scripts/set_invocation_mode.py` | 在 `agents/openai.yaml` 中切换 `auto` / `explicit` 调用模式 |
 | `scripts/snapshot_worktree.py` | 为没有 VCS revision 的工作区生成可复现的 `worktree-snapshot:<sha256>` |
@@ -139,7 +142,7 @@ python scripts/validate_task_contract.py templates/task-contract.md
 python scripts/validate_task_contract.py path/to/contract.md --manifest path/to/evidence-manifest.md
 ```
 
-校验器从 Markdown 契约中读取一个 fenced `json` block，检查必填字段、具体执行单元 ID、风险与团队一致性、宿主能力证据形状、路径形状、gate 要求、迁移授权和证据绑定标志。
+校验器从 Markdown 契约中读取一个 fenced `json` block，检查必填字段、具体执行单元 ID、风险与团队一致性、宿主能力证据形状、委派可用时的投递探针完整性、路径形状、gate 要求、迁移授权和证据绑定标志。
 
 加上 `--manifest` 后，它还会核对 manifest 的 task ID 和 base revision 是否与契约一致，要求 `reviewed_revision == executed_revision`，验证 handoff、acceptance、host-evidence 和 artifact 的 SHA256 与真实文件一致，并解析 handoff/acceptance 的精确字段：handoff 的 `state` 必须是 `approved` 或 `executed`，acceptance 的 `Decision` 必须是 `pass`。它不能证明这些文件真实、作者身份或语义正确。
 
@@ -150,12 +153,21 @@ python scripts/validate_task_contract.py path/to/contract.md --manifest path/to/
 ## 兼容性与限制
 
 - 委派原语名称不写死。检测宿主实际提供的能力并记录。
-- 宿主能力检测必须包含方法、观察结果、证据定位、时间戳和 fallback 记录。委派可用时，fallback 记录为 available，但不要求实际执行。
+- 宿主能力检测必须是关闭历史继承的往返探针：一次性子 Agent 把唯一 token 的摘要写进工作区相对路径，协调者读回，再通过 follow-up 发第二个 token，并证明它回到了同一个子 Agent。六项状态必须全为 true，token 与路径都必须不同，任一步失败即走单 Agent 路径。
+- 探针通过时 fallback 记为 `available`；只有真的跑过单 Agent 验证，才记 `exercised`。
 - 没有委派能力时，降级为一个 Agent 加一次新的验证 pass。
 - 默认禁用嵌套委派。
 - 默认最多三个 subagent、两个并行 subagent。
 - 契约未给值时，默认每个 Agent 30 分钟、总计 90 分钟、两轮无进展停止。
 - 本版本不声称生产部署经验、企业结果或自主运行能力。
+
+### 迁移
+
+本版有意加严校验：`delegation_available: true` 但没有 `detection.probe` 的契约现在会校验失败。老契约要么补上探针结果，要么把 `delegation_available` 设为 `false`、`detection.result` 设为 `"unavailable"`、`fallback.result` 设为 `"exercised"`，并关掉所有委派 gate。`contract_version` 仍为 1，本次不升版本。
+
+## 已知宿主问题
+
+- Codex MultiAgentV2 在非 OpenAI provider 下会把明文任务编码成密文消息：子 Agent 能启动、能读工作区，但只会回问候语。工具签名、源码定位和退回 V1 的做法见 `adapters/codex-multi-agent-v2/README.md`。在这种宿主上探针会失败，本 Skill 退回单 Agent 加一次新的验证 pass。
 
 ## 发布边界
 

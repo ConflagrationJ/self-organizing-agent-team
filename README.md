@@ -61,12 +61,13 @@ The agent runs `scripts/set_invocation_mode.py` and reports the result. A new ch
 
 ## 30-second usage
 
-1. Classify the task as low, medium, or high risk.
-2. If low risk or delegation is unavailable, use one agent and an independent verification pass.
-3. Otherwise copy `templates/task-contract.md`, set the task ID, base revision, write scope, gates, acceptance checks, and authorization requests.
-4. Run `python scripts/validate_task_contract.py path/to/contract.md` as a structure check. Add `--manifest path/to/evidence-manifest.md` when handoff and acceptance files exist.
-5. Run the gates in order: plan review (high risk only), implementation, code review, independent execution, acceptance.
-6. Stop on revision drift, unauthorized action, review-time writes, two unresolved rounds, or no measurable progress.
+1. Run the delegation probe from `templates/delegation-probe.md` before the first delegated task, with history inheritance disabled. Record both tokens, both paths, and the six probe states in the contract.
+2. Classify the task as low, medium, or high risk.
+3. If low risk, or if the probe failed, use one agent and an independent verification pass.
+4. Otherwise copy `templates/task-contract.md`, set the task ID, base revision, write scope, gates, acceptance checks, and authorization requests.
+5. Run `python scripts/validate_task_contract.py path/to/contract.md` as a structure check. Add `--manifest path/to/evidence-manifest.md` when handoff and acceptance files exist.
+6. Run the gates in order: plan review (high risk only), implementation, code review, independent execution, acceptance.
+7. Stop on revision drift, unauthorized action, review-time writes, two unresolved rounds, or no measurable progress.
 
 ## Forward-test acceptance scenarios (not executed)
 
@@ -117,6 +118,8 @@ Failure: writing code before plan review, reviewing your own change, modifying f
 | `references/evidence-and-gates.md` | Evidence envelope and review verdicts |
 | `references/risk-and-authorization.md` | Approval matrix for external and irreversible actions |
 | `templates/` | Contract, handoff, review, and acceptance forms |
+| `templates/delegation-probe.md` | History-isolated round-trip delivery probe for the host delegation tools |
+| `adapters/` | Host-specific notes, including known delegation defects |
 | `scripts/validate_task_contract.py` | Structure-only validator |
 | `scripts/set_invocation_mode.py` | Switch `auto` / `explicit` invocation policy in `agents/openai.yaml` |
 | `scripts/snapshot_worktree.py` | Reproducible `worktree-snapshot:<sha256>` revision for workspaces without a VCS revision |
@@ -139,7 +142,7 @@ python scripts/validate_task_contract.py templates/task-contract.md
 python scripts/validate_task_contract.py path/to/contract.md --manifest path/to/evidence-manifest.md
 ```
 
-The validator reads one fenced `json` block from a Markdown contract. It checks required fields, concrete execution-unit IDs, risk-to-team consistency, host-capability evidence shape, path shape, gate requirements, migration authorization, and evidence-binding flags.
+The validator reads one fenced `json` block from a Markdown contract. It checks required fields, concrete execution-unit IDs, risk-to-team consistency, host-capability evidence shape, delegation probe completeness when delegation is available, path shape, gate requirements, migration authorization, and evidence-binding flags.
 
 With `--manifest`, it also checks the manifest's task ID and base revision against the contract, requires `reviewed_revision == executed_revision`, verifies the linked handoff, acceptance, host-evidence, and artifact SHA256 values against real files, and parses exact handoff/acceptance fields: handoff `state` must be `approved` or `executed`, and acceptance `Decision` must be `pass`. It does not prove the truth or authorship of those files.
 
@@ -150,12 +153,21 @@ It cannot determine whether the stated risk is correct, whether a reviewer was g
 ## Compatibility and limits
 
 - Delegation primitive names are not hard-coded. Detect what the host provides and record it.
-- Host detection must include a method, observed result, evidence locator, timestamp, and a fallback record. When delegation is available, the fallback is recorded as available without being exercised.
+- Host detection must be a round-trip probe with history inheritance disabled: a disposable child writes the digest of a unique token to a workspace-relative file, the coordinator reads it back, then a second token goes through the follow-up channel and must prove it reached the same child. All six probe states must be true, tokens and paths must differ, and any failure means the single-agent path.
+- The fallback record stays `available` when delegation passes the probe. Record `exercised` only after the single-agent verification pass actually ran.
 - Without delegation, the skill degrades to one agent plus a fresh verification pass.
 - Nested delegation is disabled by default.
 - The default maximum is three subagents and two parallel subagents.
 - Defaults, when a contract does not choose values, are 30 minutes per agent, 90 minutes total, and two no-progress rounds.
 - This release does not claim production deployment experience, enterprise results, or autonomous operation.
+
+### Migration
+
+This release tightens validation on purpose. A contract with `delegation_available: true` and no `detection.probe` now fails validation. An existing contract must either record a probe result or set `delegation_available: false`, `detection.result: "unavailable"`, `fallback.result: "exercised"`, and turn every delegated gate off. `contract_version` stays 1; no version bump accompanies this change.
+
+## Known host issues
+
+- Codex MultiAgentV2 on a non-OpenAI provider encodes plaintext tasks as encrypted messages: the child starts, reads the workspace, and answers with a greeting. See `adapters/codex-multi-agent-v2/README.md` for tool signatures, source references, and the V1 workaround. When the defect is present, the probe fails and the skill falls back to one agent plus a fresh verification pass.
 
 ## Publication boundary
 

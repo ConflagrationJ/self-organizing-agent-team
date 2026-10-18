@@ -9,13 +9,24 @@ Use this skill to choose the smallest safe team for a delivery task, not to crea
 
 ## First: detect host capability
 
-Check which delegation mechanism the current host actually exposes. Do not assume a particular tool name, syntax, or nesting model. If the host ships a documented adapter, read it before creating anything. Host policy, sandbox, and approval controls always take precedence over this protocol. If no usable delegation mechanism exists:
+Tool discovery is not detection. A host can expose spawn, send, and follow-up primitives and still drop the task body: the child starts, reads the workspace, and answers with a greeting because it never received the task. Before any real delegation, run one round-trip probe from `templates/delegation-probe.md`:
+
+1. Pick two tokens and two workspace-relative paths (prefer `.sot-tmp/`, which the bundled `.gitignore` covers). Run the probe with history inheritance disabled: a host that copies the parent thread by default also copies the parent's spawn call, which carries TOKEN_A, and a fresh child can fake delivery from it. Use `fork_turns: "none"` on a V2 host and `fork_context: false` on a V1 host. If the host cannot disable inheritance, the probe is inconclusive and delegation is unavailable.
+2. Spawn one disposable agent with TOKEN_A and FILE_A, requiring the lowercase sha256 of TOKEN_A in FILE_A, no trailing newline, and TOKEN_A in the reply. The file check is joint evidence for one round of delivery, execution, and write; do not split it into three independent conclusions. Attribute the stage from the reply, not the file: a greeting with no file fails delivery and write, while a permission error with no file means the task arrived and the write failed.
+3. Send a follow-up that carries TOKEN_B and FILE_B only, requiring `TOKEN_A:TOKEN_B` in FILE_B and deletion of FILE_A. TOKEN_A is never written to the workspace, so a child that never saw the first task cannot produce FILE_B; that is what confirms the follow-up reached the same child. If a host creates a fresh child for the follow-up and hands it the parent thread, that child can read TOKEN_A from the transcript: history isolation is then unproven and the probe is inconclusive.
+4. Record the six probe booleans, both tokens, both paths, the timestamp, and the raw log locator under `host_capabilities.detection.probe`, then delete FILE_B after recording its hash; the child already deleted FILE_A.
+
+If any step fails, set `delegation_available: false`, use the single-agent path below, and record which step failed. A failed probe is evidence about the host, not a reason to repeat the same call until it looks successful.
+
+A reply that never mentions the task - a greeting, "what do you want me to do", a summary of the workspace, an ignored token, or a reply quoting only the task header - means the task body did not arrive. That is a delivery failure, not a model refusal. A reply that does name the task and then refuses to write is a different case: delivery worked, and the write or policy gate failed. Record `initial_task_delivered: true` and `write_succeeded: false` for it.
+
+Host policy, sandbox, and approval controls always take precedence over this protocol. Do not assume a particular tool name, syntax, or nesting model. If the host ships a documented adapter under `adapters/`, read it before creating anything. If no usable delegation mechanism exists:
 
 1. Run the work as a single agent.
 2. Perform a separate verification pass after implementation: reread the diff, run tests, and record evidence.
 3. State explicitly that no subagents were created. Never imply that a team was formed.
 
-Record the result in the task contract under `host_capabilities`, including the detection method, observed result, evidence locator, timestamp, and a fallback record (`available`, or `exercised` when delegation is unavailable). A string such as `runtime-detected` is not evidence.
+Record the result in the task contract under `host_capabilities`, including the probe result, evidence locator, timestamp, and a fallback record (`available`, or `exercised` after the single-agent pass actually ran). A string such as `runtime-detected` is not evidence. The probe is an entrance ticket for this host build only; rerun it after a host version, model, provider, or adapter change.
 
 ## Risk routing
 
@@ -79,6 +90,7 @@ Read only what the current task needs:
 - `references/risk-and-authorization.md` for the external-action approval matrix.
 Templates:
 
+- `templates/delegation-probe.md`
 - `templates/task-contract.md`
 - `templates/evidence-manifest.md`
 - `templates/handoff.md`
