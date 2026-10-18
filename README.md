@@ -46,32 +46,18 @@ Invocation policy: Codex reads `agents/openai.yaml`; implicit invocation is enab
 
 Enable implicit routing only after independent forward tests.
 
-### Invocation mode
+### Invocation mode / 调用模式
 
-The source of truth is `agents/openai.yaml`. The default is `auto`:
+Default is `auto`. You do not need to edit YAML. Ask the agent in either language:
 
-```text
-auto       allow implicit invocation
-explicit   require $self-organizing-agent-team
-```
+- "Set self-organizing-agent-team to automatic invocation."  
+  “把 self-organizing-agent-team 设为自动调用”
+- "Set self-organizing-agent-team to explicit invocation."  
+  “把 self-organizing-agent-team 改成仅显式调用”
+- "Check the current invocation mode for self-organizing-agent-team."  
+  “检查 self-organizing-agent-team 当前调用模式”
 
-Switch an installed skill from its directory:
-
-```text
-python scripts/set_invocation_mode.py --mode explicit
-python scripts/set_invocation_mode.py --mode auto
-python scripts/set_invocation_mode.py --check
-```
-
-Changing the policy may require a new Codex chat before the skill metadata is reloaded.
-
-You do not need to edit YAML by hand. Tell the agent any of these:
-
-- "Set self-organizing-agent-team to automatic invocation."
-- "Set self-organizing-agent-team to explicit invocation."
-- "Check the current invocation mode for self-organizing-agent-team."
-
-The agent should run the bundled `scripts/set_invocation_mode.py`, verify the resulting mode, and state that a new chat may be needed for the metadata change to take effect.
+The agent runs `scripts/set_invocation_mode.py` and reports the result. A new chat may be needed before the new metadata is loaded.
 
 ## 30-second usage
 

@@ -46,32 +46,18 @@ $CODEX_HOME/skills/self-organizing-agent-team
 
 只有在独立前向测试后才启用隐式路由。
 
-### 调用模式
+### 调用模式 / Invocation mode
 
-唯一配置源是 `agents/openai.yaml`。默认是 `auto`：
+默认 `auto`。不需要手动编辑 YAML，直接用中文或英文对 Agent 说：
 
-```text
-auto       允许隐式调用
-explicit   只能用 $self-organizing-agent-team 显式调用
-```
+- “把 self-organizing-agent-team 设为自动调用”  
+  "Set self-organizing-agent-team to automatic invocation."
+- “把 self-organizing-agent-team 改成仅显式调用”  
+  "Set self-organizing-agent-team to explicit invocation."
+- “检查 self-organizing-agent-team 当前调用模式”  
+  "Check the current invocation mode for self-organizing-agent-team."
 
-在已安装的 Skill 目录中切换：
-
-```text
-python scripts/set_invocation_mode.py --mode explicit
-python scripts/set_invocation_mode.py --mode auto
-python scripts/set_invocation_mode.py --check
-```
-
-切换后可能需要新开 Codex chat，让技能元数据重新加载。
-
-不需要手动编辑 YAML。直接对 Agent 说：
-
-- “把 self-organizing-agent-team 设为自动调用”
-- “把 self-organizing-agent-team 改成仅显式调用”
-- “检查 self-organizing-agent-team 当前调用模式”
-
-Agent 应运行内置的 `scripts/set_invocation_mode.py`，验证结果，并说明可能需要新开 chat 才会重新加载技能元数据。
+Agent 会运行 `scripts/set_invocation_mode.py` 并回报结果。切换后可能需要新开一个 chat，技能元数据才会重新加载。
 
 ## 30 秒使用
 
