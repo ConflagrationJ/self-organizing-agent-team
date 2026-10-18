@@ -42,7 +42,7 @@ Codex:
 $CODEX_HOME/skills/self-organizing-agent-team
 ```
 
-Invocation policy: Codex reads `agents/openai.yaml`; this release sets `allow_implicit_invocation: false`, so invoke it with `$self-organizing-agent-team`.
+Invocation policy: Codex reads `agents/openai.yaml`; implicit invocation is enabled so Codex can select the skill when the task genuinely needs governed multi-agent delivery. `$self-organizing-agent-team` remains available for explicit invocation.
 
 Enable implicit routing only after independent forward tests.
 

@@ -3,4 +3,4 @@ interface:
   short_description: "Risk-based minimal multi-agent delivery"
   default_prompt: "Use $self-organizing-agent-team to classify this task, choose the smallest safe team, and apply review and evidence gates."
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true

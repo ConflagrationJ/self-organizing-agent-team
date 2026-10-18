@@ -42,7 +42,7 @@ Codex：
 $CODEX_HOME/skills/self-organizing-agent-team
 ```
 
-调用策略：Codex 读取 `agents/openai.yaml`；本版本设置 `allow_implicit_invocation: false`，因此用 `$self-organizing-agent-team` 显式调用。
+调用策略：Codex 读取 `agents/openai.yaml`；本版本开启隐式调用，Codex 可以在任务确实需要受控多 Agent 交付时自动选择本 Skill；仍可用 `$self-organizing-agent-team` 显式调用。
 
 只有在独立前向测试后才启用隐式路由。
 
