@@ -170,8 +170,9 @@ This release tightens validation on purpose. A contract with `delegation_availab
 ## Known host issues
 
 - Codex MultiAgentV2 on a non-OpenAI provider encodes plaintext tasks as encrypted messages: the child starts, reads the workspace, and answers with a greeting. See `adapters/codex-multi-agent-v2/README.md` for tool signatures and source references.
-- `scripts/host_preflight.py` recognizes the `V2 + non-OpenAI provider` combination and returns `single_agent`. This includes a local proxy registered under a custom provider id; the runtime test is the resolved provider name (`OpenAI`), not the base URL. The skill then creates no child agents and uses the single-agent path with a fresh verification pass. It does not require the user to change Codex configuration.
-- Only when the user explicitly wants delegation on a known-incompatible host should the `multi_agent_version` or provider workaround be offered as an optional host change, never as a prerequisite for using the skill.
+- `scripts/host_preflight.py` recognizes the `V2 + non-OpenAI provider` combination and returns `single_agent`. This includes a local proxy registered under a custom provider id; the runtime test is the resolved provider name (`OpenAI`), not the base URL. The skill finishes the current task with the single-agent path and a fresh verification pass; it does not edit Codex configuration by itself. The preflight reports `repair_needed` and a `repair_hint` when a one-time host repair is available.
+- If the user explicitly wants delegation, offer the one-time repair from the adapter: quit cc-switch if it generates the catalog (disable its auto-start if it launches with Codex or Windows), back up the catalog, set the selected model's `multi_agent_version` to `v1`, verify with `codex debug models` and `codex features list`, restart Codex, and start a new chat. Existing threads keep their recorded version. The repair is optional and never a prerequisite.
+- The preflight prefers the rollout named by `CODEX_THREAD_ID` / `CODEX_SESSION_ID`, so a still-running old thread does not force `restart_required`.
 
 ## Publication boundary
 

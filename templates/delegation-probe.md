@@ -14,7 +14,7 @@ Run `python <skill-dir>/scripts/host_preflight.py` from the directory that conta
 
 - `v1`: use the V1 spawn surface and continue with this probe.
 - `v2_probe`: V2 on the OpenAI provider. Use the V2 spawn surface with `fork_turns: "none"` and continue.
-- `single_agent`: the host is expected to lose child task bodies (V2 with a non-OpenAI provider, including a local proxy registered under a custom provider id), or multi-agent is disabled. Do not spawn a probe child. Record `delegation_available: false`, `detection.method: "host preflight"`, `detection.result: "unavailable"`, `detection.observed` (the measured route/version), `detection.evidence`, `detection.timestamp`, the preflight reason, and use the single-agent path with a separate verification pass.
+- `single_agent`: the host is expected to lose child task bodies (V2 with a non-OpenAI provider, including a local proxy registered under a custom provider id), or multi-agent is disabled. Do not spawn a probe child. Record `delegation_available: false`, `detection.method: "host preflight"`, `detection.result: "unavailable"`, `detection.observed` (the measured route/version), `detection.evidence`, `detection.timestamp`, the preflight reason, and use the single-agent path with a separate verification pass. If the user wants delegation, show the preflight's `repair_hint`; get explicit approval before editing host configuration, and expect a restart plus a new chat.
 - `restart_required`: the running session is V2 but the current configuration selects V1. Start a new chat, rerun the preflight, and only then continue.
 - `probe`: the route is unclear; use the probe to decide.
 

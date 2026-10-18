@@ -170,8 +170,9 @@ python scripts/validate_task_contract.py path/to/contract.md --manifest path/to/
 ## 已知宿主问题
 
 - Codex MultiAgentV2 在非 OpenAI provider 下会把明文任务编码成密文消息：子 Agent 能启动、能读工作区，但只会回问候语。工具签名和源码定位见 `adapters/codex-multi-agent-v2/README.md`。
-- `scripts/host_preflight.py` 会先识别这种 `V2 + 非 OpenAI provider` 组合（包括用自定义 provider id 注册的本地代理）；运行时判定看解析后的 provider 名是否为 `OpenAI`，不看 base URL。判定为 `single_agent` 时本 Skill 不创建子 Agent，直接走单 Agent 加一次新的验证 pass。它不要求用户修改 Codex 配置。
-- 只有用户明确希望在已知不兼容宿主上恢复多代理时，才把 `multi_agent_version` / provider 的宿主修复作为可选项说明，不能把它当成 Skill 的前置条件。
+- `scripts/host_preflight.py` 会先识别这种 `V2 + 非 OpenAI provider` 组合（包括用自定义 provider id 注册的本地代理）；运行时判定看解析后的 provider 名是否为 `OpenAI`，不看 base URL。判定为 `single_agent` 时本 Skill 用单 Agent 加一次新的验证 pass 把当前任务做完，不自行修改 Codex 配置。存在一次性宿主修复时，预检会给出 `repair_needed` 和 `repair_hint`。
+- 只有用户明确希望恢复多代理时，才提供适配器里的一次性修复：若模型目录由 cc-switch 生成，先完全退出 cc-switch（若它随 Codex 或 Windows 自启，禁用自启或保持关闭）；备份目录；把所选模型的 `multi_agent_version` 改成 `v1`；用 `codex debug models` 和 `codex features list` 复核；重启 Codex 并新开会话。老线程会继续沿用已记录的版本。该修复是可选项，永远不是 Skill 的前置条件。
+- 预检优先读取 `CODEX_THREAD_ID` / `CODEX_SESSION_ID` 对应的 rollout，老线程还在写时不会误判成 `restart_required`。
 
 ## 发布边界
 

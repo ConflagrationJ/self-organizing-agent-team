@@ -3,10 +3,13 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from typing import Optional, Tuple
+from unittest import mock
 
 
 SCRIPT = Path(__file__).with_name("host_preflight.py")
@@ -17,6 +20,29 @@ SPEC.loader.exec_module(MOD)
 
 
 class HostPreflightTests(unittest.TestCase):
+    def add_session(
+        self,
+        root: Path,
+        name: str,
+        version: str,
+        age_seconds: float = 0.0,
+    ) -> Path:
+        path = root / "sessions" / "2026" / "10" / "18" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "multi_agent_version": version,
+                    "cli_version": "test-cli",
+                }
+            ),
+            encoding="utf-8",
+        )
+        if age_seconds:
+            stamp = time.time() - age_seconds
+            os.utime(path, (stamp, stamp))
+        return path
+
     def build_host(
         self,
         *,
@@ -170,6 +196,7 @@ class HostPreflightTests(unittest.TestCase):
     def test_catalog_v1_routes_v1(self):
         root, session = self.build_host(catalog_version="v1", session_version="v1")
         result = MOD.inspect_host(root, session)
+        self.assertEqual(result["session_source"], "explicit")
         self.assertEqual(result["route"], "v1")
         self.assertEqual(result["predicted_multi_agent_version"], "v1")
 
@@ -205,6 +232,72 @@ class HostPreflightTests(unittest.TestCase):
         self.assertEqual(result["prediction_source"], "session")
         self.assertEqual(result["predicted_multi_agent_version"], "v2")
         self.assertEqual(result["route"], "single_agent")
+
+    def test_prefers_current_session_over_latest(self):
+        root, _ = self.build_host(catalog_version="v1", session_version=None)
+        self.add_session(root, "rollout-current-session.jsonl", "v1", age_seconds=120)
+        self.add_session(root, "rollout-newer-thread.jsonl", "v2", age_seconds=0)
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CODEX_THREAD_ID": "current-session",
+                "CODEX_SESSION_ID": "current-session",
+            },
+            clear=False,
+        ):
+            result = MOD.inspect_host(root)
+        self.assertEqual(result["session_source"], "current")
+        self.assertEqual(result["latest_session_multi_agent_version"], "v1")
+
+    def test_missing_current_session_falls_back_to_latest(self):
+        root, _ = self.build_host(catalog_version="v1", session_version=None)
+        self.add_session(root, "rollout-newer-thread.jsonl", "v2", age_seconds=0)
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CODEX_THREAD_ID": "does-not-exist",
+                "CODEX_SESSION_ID": "does-not-exist",
+            },
+            clear=False,
+        ):
+            result = MOD.inspect_host(root)
+        self.assertEqual(result["session_source"], "latest")
+        self.assertEqual(result["latest_session_multi_agent_version"], "v2")
+
+    def test_catalog_repair_hint_mentions_cc_switch(self):
+        root, session = self.build_host()
+        result = MOD.inspect_host(root, session)
+        self.assertTrue(result["repair_needed"])
+        self.assertTrue(result["restart_needed"])
+        self.assertEqual(result["repair_source"], "catalog")
+        self.assertEqual(result["catalog_owner"], "cc-switch")
+        self.assertIn("multi_agent_version", result["repair_hint"])
+        self.assertIn("new chat", result["repair_hint"])
+
+    def test_feature_repair_hint(self):
+        root, session = self.build_host(
+            catalog_version="v1",
+            feature_v2=True,
+            session_version="v2",
+        )
+        result = MOD.inspect_host(root, session)
+        self.assertTrue(result["repair_needed"])
+        self.assertEqual(result["repair_source"], "feature")
+        self.assertIn("multi_agent_v2", result["repair_hint"])
+
+    def test_v1_needs_no_repair(self):
+        root, session = self.build_host(catalog_version="v1", session_version="v1")
+        result = MOD.inspect_host(root, session)
+        self.assertFalse(result["repair_needed"])
+        self.assertFalse(result["restart_needed"])
+        self.assertIn("No host repair", result["repair_hint"])
+
+    def test_restart_required_hint(self):
+        root, session = self.build_host(catalog_version="v1", session_version="v2")
+        result = MOD.inspect_host(root, session)
+        self.assertFalse(result["repair_needed"])
+        self.assertTrue(result["restart_needed"])
+        self.assertIn("Restart Codex", result["repair_hint"])
 
     def test_agents_disabled_routes_single_agent(self):
         root, session = self.build_host(
