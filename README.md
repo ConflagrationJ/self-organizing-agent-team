@@ -61,13 +61,14 @@ The agent runs `scripts/set_invocation_mode.py` and reports the result. A new ch
 
 ## 30-second usage
 
-1. Run the delegation probe from `templates/delegation-probe.md` before the first delegated task, with history inheritance disabled. Record both tokens, both paths, and the six probe states in the contract.
-2. Classify the task as low, medium, or high risk.
-3. If low risk, or if the probe failed, use one agent and an independent verification pass.
-4. Otherwise copy `templates/task-contract.md`, set the task ID, base revision, write scope, gates, acceptance checks, and authorization requests.
-5. Run `python scripts/validate_task_contract.py path/to/contract.md` as a structure check. Add `--manifest path/to/evidence-manifest.md` when handoff and acceptance files exist.
-6. Run the gates in order: plan review (high risk only), implementation, code review, independent execution, acceptance.
-7. Stop on revision drift, unauthorized action, review-time writes, two unresolved rounds, or no measurable progress.
+1. Run `python <skill-dir>/scripts/host_preflight.py` to read the current host route without changing configuration.
+2. Run the delegation probe from `templates/delegation-probe.md` before the first delegated task, with history inheritance disabled. Record both tokens, both paths, and the six probe states in the contract.
+3. Classify the task as low, medium, or high risk.
+4. If low risk, `single_agent` from preflight, or the probe failed, use one agent and an independent verification pass.
+5. Otherwise copy `templates/task-contract.md`, set the task ID, base revision, write scope, gates, acceptance checks, and authorization requests.
+6. Run `python scripts/validate_task_contract.py path/to/contract.md` as a structure check. Add `--manifest path/to/evidence-manifest.md` when handoff and acceptance files exist.
+7. Run the gates in order: plan review (high risk only), implementation, code review, independent execution, acceptance.
+8. Stop on revision drift, unauthorized action, review-time writes, two unresolved rounds, or no measurable progress.
 
 ## Forward-test acceptance scenarios (not executed)
 
@@ -121,6 +122,7 @@ Failure: writing code before plan review, reviewing your own change, modifying f
 | `templates/delegation-probe.md` | History-isolated round-trip delivery probe for the host delegation tools |
 | `adapters/` | Host-specific notes, including known delegation defects |
 | `scripts/validate_task_contract.py` | Structure-only validator |
+| `scripts/host_preflight.py` | Read the local Codex host and return `v1`, `v2_probe`, `single_agent`, `restart_required`, or `probe` without changing configuration |
 | `scripts/set_invocation_mode.py` | Switch `auto` / `explicit` invocation policy in `agents/openai.yaml` |
 | `scripts/snapshot_worktree.py` | Reproducible `worktree-snapshot:<sha256>` revision for workspaces without a VCS revision |
 | `scripts/test_validate_task_contract.py` | Positive, negative, and manifest validator tests |
@@ -167,7 +169,9 @@ This release tightens validation on purpose. A contract with `delegation_availab
 
 ## Known host issues
 
-- Codex MultiAgentV2 on a non-OpenAI provider encodes plaintext tasks as encrypted messages: the child starts, reads the workspace, and answers with a greeting. See `adapters/codex-multi-agent-v2/README.md` for tool signatures, source references, and the V1 workaround. When the defect is present, the probe fails and the skill falls back to one agent plus a fresh verification pass.
+- Codex MultiAgentV2 on a non-OpenAI provider encodes plaintext tasks as encrypted messages: the child starts, reads the workspace, and answers with a greeting. See `adapters/codex-multi-agent-v2/README.md` for tool signatures and source references.
+- `scripts/host_preflight.py` recognizes the `V2 + non-OpenAI provider` combination and returns `single_agent`. This includes a local proxy registered under a custom provider id; the runtime test is the resolved provider name (`OpenAI`), not the base URL. The skill then creates no child agents and uses the single-agent path with a fresh verification pass. It does not require the user to change Codex configuration.
+- Only when the user explicitly wants delegation on a known-incompatible host should the `multi_agent_version` or provider workaround be offered as an optional host change, never as a prerequisite for using the skill.
 
 ## Publication boundary
 

@@ -8,6 +8,20 @@ A host can expose spawn, send, and follow-up tools and still fail to deliver the
 
 A host can also copy the parent thread into the child. The parent's spawn call contains the probe tokens, so an inherited history makes a child that never received the task look like it did. The probe therefore runs with history inheritance disabled, and it proves that the follow-up reached the same child, not merely that some child exists.
 
+## Preflight before the probe
+
+Run `python <skill-dir>/scripts/host_preflight.py` from the directory that contains the skill first. It does not change configuration.
+
+- `v1`: use the V1 spawn surface and continue with this probe.
+- `v2_probe`: V2 on the OpenAI provider. Use the V2 spawn surface with `fork_turns: "none"` and continue.
+- `single_agent`: the host is expected to lose child task bodies (V2 with a non-OpenAI provider, including a local proxy registered under a custom provider id), or multi-agent is disabled. Do not spawn a probe child. Record `delegation_available: false`, `detection.method: "host preflight"`, `detection.result: "unavailable"`, `detection.observed` (the measured route/version), `detection.evidence`, `detection.timestamp`, the preflight reason, and use the single-agent path with a separate verification pass.
+- `restart_required`: the running session is V2 but the current configuration selects V1. Start a new chat, rerun the preflight, and only then continue.
+- `probe`: the route is unclear; use the probe to decide.
+
+The preflight is an optimization and a known-incompatibility gate, not a replacement for the round-trip probe on an unknown or plausibly compatible host. It mirrors the runtime's provider test: OpenAI means the resolved provider name is exactly `OpenAI`, not that the base URL contains `openai`.
+
+On a non-OpenAI V2 host, `single_agent` is the default. Only when the user explicitly wants to test a new host build, run `python <skill-dir>/scripts/host_preflight.py --probe` and continue with this probe. A passing result applies to that host build only.
+
 ## Hard requirements
 
 - Disable history inheritance for the initial spawn and for any child the follow-up creates: `fork_turns: "none"` on a V2 host, `fork_context: false` on a V1 host. Never run the probe with `fork_turns: "all"`; V2 defaults to `all`, and inherited spawn arguments make the probe pass without any delivery.

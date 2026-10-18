@@ -61,13 +61,14 @@ Agent 会运行 `scripts/set_invocation_mode.py` 并回报结果。切换后可�
 
 ## 30 秒使用
 
-1. 第一次委派前先跑 `templates/delegation-probe.md` 的投递探针，必须关闭历史继承；把两个 token、两个路径和六项状态记进契约。
-2. 把任务分为低、中、高风险。
-3. 低风险或探针失败时，使用单 Agent，并做一次独立验证。
-4. 其他情况复制 `templates/task-contract.md`，填写 task ID、base revision、write scope、gate、验收检查和授权请求。
-5. 运行 `python scripts/validate_task_contract.py path/to/contract.md` 做结构检查。存在 handoff 和 acceptance 文件时，加上 `--manifest path/to/evidence-manifest.md`。
-6. 按顺序执行 gate：方案复核（仅高风险）、实现、代码复核、独立执行、验收。
-7. 遇到 revision 漂移、未授权动作、复核期间写入、两轮未收敛或没有可衡量进展时停止。
+1. 先运行 `python <skill-dir>/scripts/host_preflight.py`，读取当前宿主的路由结论；它不会修改任何配置。
+2. 第一次委派前再跑 `templates/delegation-probe.md` 的投递探针，必须关闭历史继承；把两个 token、两个路径和六项状态记进契约。
+3. 把任务分为低、中、高风险。
+4. 低风险、预检为 `single_agent` 或探针失败时，使用单 Agent，并做一次独立验证。
+5. 其他情况复制 `templates/task-contract.md`，填写 task ID、base revision、write scope、gate、验收检查和授权请求。
+6. 运行 `python scripts/validate_task_contract.py path/to/contract.md` 做结构检查。存在 handoff 和 acceptance 文件时，加上 `--manifest path/to/evidence-manifest.md`。
+7. 按顺序执行 gate：方案复核（仅高风险）、实现、代码复核、独立执行、验收。
+8. 遇到 revision 漂移、未授权动作、复核期间写入、两轮未收敛或没有可衡量进展时停止。
 
 ## 前向测试验收场景（尚未执行）
 
@@ -121,6 +122,7 @@ python scripts/test_forward_scenarios.py
 | `templates/delegation-probe.md` | 关闭历史继承的宿主委派往返投递探针 |
 | `adapters/` | 宿主专属说明，含已知委派缺陷 |
 | `scripts/validate_task_contract.py` | 仅做结构校验 |
+| `scripts/host_preflight.py` | 读取当前 Codex 宿主并给出 `v1` / `v2_probe` / `single_agent` / `restart_required` / `probe` 路由，不修改配置 |
 | `scripts/set_invocation_mode.py` | 在 `agents/openai.yaml` 中切换 `auto` / `explicit` 调用模式 |
 | `scripts/snapshot_worktree.py` | 为没有 VCS revision 的工作区生成可复现的 `worktree-snapshot:<sha256>` |
 | `scripts/test_validate_task_contract.py` | 正例、反例和 manifest 校验测试 |
@@ -167,7 +169,9 @@ python scripts/validate_task_contract.py path/to/contract.md --manifest path/to/
 
 ## 已知宿主问题
 
-- Codex MultiAgentV2 在非 OpenAI provider 下会把明文任务编码成密文消息：子 Agent 能启动、能读工作区，但只会回问候语。工具签名、源码定位和退回 V1 的做法见 `adapters/codex-multi-agent-v2/README.md`。在这种宿主上探针会失败，本 Skill 退回单 Agent 加一次新的验证 pass。
+- Codex MultiAgentV2 在非 OpenAI provider 下会把明文任务编码成密文消息：子 Agent 能启动、能读工作区，但只会回问候语。工具签名和源码定位见 `adapters/codex-multi-agent-v2/README.md`。
+- `scripts/host_preflight.py` 会先识别这种 `V2 + 非 OpenAI provider` 组合（包括用自定义 provider id 注册的本地代理）；运行时判定看解析后的 provider 名是否为 `OpenAI`，不看 base URL。判定为 `single_agent` 时本 Skill 不创建子 Agent，直接走单 Agent 加一次新的验证 pass。它不要求用户修改 Codex 配置。
+- 只有用户明确希望在已知不兼容宿主上恢复多代理时，才把 `multi_agent_version` / provider 的宿主修复作为可选项说明，不能把它当成 Skill 的前置条件。
 
 ## 发布边界
 

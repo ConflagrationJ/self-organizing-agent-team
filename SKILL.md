@@ -5,18 +5,40 @@ description: Coordinate a risk-based, minimal multi-agent workflow with explicit
 
 # Self-Organizing Agent Team
 
-Use this skill to choose the smallest safe team for a delivery task, not to create a team by default.
+Use this skill to choose the smallest safe team for a delivery task, not to create a team by default. Adapt to the host you actually have; do not require the user to change Codex configuration just to use this skill.
+
+## Host compatibility preflight
+
+Run the bundled preflight from the directory that contains this SKILL.md before spawning anyone:
+
+```text
+python <skill-dir>/scripts/host_preflight.py
+```
+
+It reads `config.toml`, the referenced model catalog, and the latest session without changing configuration. It mirrors the host runtime: a provider counts as OpenAI only when its configured provider name is exactly `OpenAI`; a base URL, including a local proxy URL, is not the test. Route on its `route` value:
+
+- `v1`: the running session or effective config selects V1. Use the V1 surface and run the V1 probe.
+- `v2_probe`: V2 is selected on the OpenAI provider. Run the V2 probe with `fork_turns: "none"`.
+- `single_agent`: V2 is selected on a non-OpenAI provider (including a local proxy registered under a custom provider id), or multi-agent is disabled. Do not spawn. Record `delegation_available: false`, `detection.method: "host preflight"`, `detection.result: "unavailable"`, the measured route and reason, and run the single-agent path with a separate verification pass. Set `fallback.result: "exercised"` after that pass.
+- `restart_required`: the running session is V2 but the current config selects V1. Start a new chat, rerun the preflight, and only then decide.
+- `probe`: the effective version cannot be determined. Run the probe.
+
+If `config_mismatch` is true and the route is `v1`, the current session is still V1 while the config now selects V2. Use V1 for this session and restart after the current task if V2 is wanted.
+
+`single_agent` is the default on a non-OpenAI V2 host. If the user explicitly asks to test whether a new host build has fixed the defect, run the preflight with `--probe`, then run the V2 probe. A passing probe is evidence for this host build only; do not treat it as a standing exception.
+
+A host workaround is optional, not a prerequisite. Only discuss changing `multi_agent_version`, the model catalog, or the provider when the user explicitly wants delegation on a known-incompatible host. The skill itself must still work in single-agent mode without any host change.
 
 ## First: detect host capability
 
 Tool discovery is not detection. A host can expose spawn, send, and follow-up primitives and still drop the task body: the child starts, reads the workspace, and answers with a greeting because it never received the task. Before any real delegation, run one round-trip probe from `templates/delegation-probe.md`:
 
-1. Pick two tokens and two workspace-relative paths (prefer `.sot-tmp/`, which the bundled `.gitignore` covers). Run the probe with history inheritance disabled: a host that copies the parent thread by default also copies the parent's spawn call, which carries TOKEN_A, and a fresh child can fake delivery from it. Use `fork_turns: "none"` on a V2 host and `fork_context: false` on a V1 host. If the host cannot disable inheritance, the probe is inconclusive and delegation is unavailable.
+1. Run the host compatibility preflight above. If its route is `single_agent`, stop delegation detection and use the single-agent path; record the measured route and reason. If it is `restart_required`, start a new chat and rerun the preflight. If it is `v1` or `v2_probe`, pick two tokens and two workspace-relative paths (prefer `.sot-tmp/`, which the bundled `.gitignore` covers). Run the probe with history inheritance disabled: a host that copies the parent thread by default also copies the parent's spawn call, which carries TOKEN_A, and a fresh child can fake delivery from it. Use `fork_turns: "none"` on a V2 host and `fork_context: false` on a V1 host. If the host cannot disable inheritance, the probe is inconclusive and delegation is unavailable.
 2. Spawn one disposable agent with TOKEN_A and FILE_A, requiring the lowercase sha256 of TOKEN_A in FILE_A, no trailing newline, and TOKEN_A in the reply. The file check is joint evidence for one round of delivery, execution, and write; do not split it into three independent conclusions. Attribute the stage from the reply, not the file: a greeting with no file fails delivery and write, while a permission error with no file means the task arrived and the write failed.
 3. Send a follow-up that carries TOKEN_B and FILE_B only, requiring `TOKEN_A:TOKEN_B` in FILE_B and deletion of FILE_A. TOKEN_A is never written to the workspace, so a child that never saw the first task cannot produce FILE_B; that is what confirms the follow-up reached the same child. If a host creates a fresh child for the follow-up and hands it the parent thread, that child can read TOKEN_A from the transcript: history isolation is then unproven and the probe is inconclusive.
 4. Record the six probe booleans, both tokens, both paths, the timestamp, and the raw log locator under `host_capabilities.detection.probe`, then delete FILE_B after recording its hash; the child already deleted FILE_A.
 
-If any step fails, set `delegation_available: false`, use the single-agent path below, and record which step failed. A failed probe is evidence about the host, not a reason to repeat the same call until it looks successful.
+If any step fails, set `delegation_available: false`, use the single-agent path below, and record which step failed. A failed probe is evidence about the host, not a reason to repeat the same call until it looks successful. A preflight `single_agent` result is a known incompatibility, not a failed model call; do not spawn a disposable agent merely to reconfirm it.
 
 A reply that never mentions the task - a greeting, "what do you want me to do", a summary of the workspace, an ignored token, or a reply quoting only the task header - means the task body did not arrive. That is a delivery failure, not a model refusal. A reply that does name the task and then refuses to write is a different case: delivery worked, and the write or policy gate failed. Record `initial_task_delivered: true` and `write_succeeded: false` for it.
 
@@ -26,7 +48,7 @@ Host policy, sandbox, and approval controls always take precedence over this pro
 2. Perform a separate verification pass after implementation: reread the diff, run tests, and record evidence.
 3. State explicitly that no subagents were created. Never imply that a team was formed.
 
-Record the result in the task contract under `host_capabilities`, including the probe result, evidence locator, timestamp, and a fallback record (`available`, or `exercised` after the single-agent pass actually ran). A string such as `runtime-detected` is not evidence. The probe is an entrance ticket for this host build only; rerun it after a host version, model, provider, or adapter change.
+Record the result in the task contract under `host_capabilities`, including the preflight route and reason, the probe result when one ran, evidence locator, timestamp, and a fallback record (`available`, or `exercised` after the single-agent pass actually ran). When the preflight routes to `single_agent`, set `detection.method: "host preflight"`, `detection.result: "unavailable"`, `detection.observed` to the measured route/version, plus `detection.evidence` and `detection.timestamp`, and omit `detection.probe`; the validator only requires the probe when `delegation_available` is true. A string such as `runtime-detected` is not evidence. The preflight and probe are entrance tickets for this host build only; rerun them after a host version, model, provider, or adapter change.
 
 ## Risk routing
 

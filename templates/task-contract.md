@@ -145,6 +145,7 @@ Replace the sample values with values for the current task. Keep exactly one fen
 - Every external or irreversible action appears in `authorization.requested_actions`.
 - Acceptance items name a command, artifact, or manual check and the evidence required.
 - `delegation_available: true` requires a `detection.probe` whose six booleans are all true: `history_isolated`, `same_child_confirmed`, `workspace_visible`, `initial_task_delivered`, `write_succeeded`, `followup_delivered`.
+- A host-preflight `delegation_available: false` sets `detection.method: "host preflight"`, `detection.result: "unavailable"`, records `observed`, `evidence`, and `timestamp`, omits `detection.probe`, and sets `fallback.result: "exercised"` after the single-agent pass.
 - `probe.history_isolated` requires the probe to run with history inheritance disabled. An inherited parent history can contain `token_a`, which makes a fresh child look like it received the task.
 - `probe.same_child_confirmed` requires the follow-up to land on the child that wrote `file_a`, proven by a value only that child knows.
 - `probe.token_a` and `probe.token_b` must differ, and `probe.file_a` and `probe.file_b` must differ, so a cached or invented reply cannot pass.

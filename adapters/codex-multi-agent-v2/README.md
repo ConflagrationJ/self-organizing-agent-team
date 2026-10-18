@@ -33,8 +33,11 @@ Source references, checked against `openai/codex` main as of 2026-10-18. All pat
 | `codex-rs/core/src/agent/control/delivery.rs:20-26` | `Encrypted` messages are built with `new_encrypted`, so `content` is empty and the body lands in `encrypted_content` |
 | `codex-rs/protocol/src/protocol.rs:992-1015` | The child model input has a readable `InputText` envelope header, then `AgentMessageInputContent::EncryptedContent` for the body |
 | `codex-rs/core/src/client.rs:1013-1030` | A non-OpenAI provider clears `encrypted_function_args` to `None`, so the router's `Some(empty)` test never matches and plaintext is misclassified |
+| `codex-rs/model-provider-info/src/lib.rs` (`is_openai`) | Defines "OpenAI" as `provider.name == "OpenAI"`; the base URL is not consulted |
 
 The last row is the trigger. The rows above it are why the consequence is silent.
+
+The trigger is keyed to the resolved provider name, not the endpoint. A provider registered as `custom` is non-OpenAI even when its `base_url` is `https://api.openai.com/v1`, and a local proxy registered as `custom` is non-OpenAI too. Only a provider whose resolved name is exactly `OpenAI` takes the OpenAI path. `scripts/host_preflight.py` mirrors that test and reports `provider_kind: openai | non_openai` plus `base_url_kind` as a separate diagnostic.
 
 ## Symptoms
 
@@ -47,7 +50,9 @@ The last row is the trigger. The rows above it are why the consequence is silent
 
 Do not read these symptoms as a model refusal, a prompt problem, or an authorization downgrade. The task never reached the model.
 
-## Workaround
+## Optional host workaround
+
+The skill does not require this workaround. Use it only when the user explicitly wants delegation on a host where the preflight reports `single_agent`; otherwise the skill must stay on the single-agent path and leave Codex configuration untouched.
 
 1. Disable the V2 feature in `~/.codex/config.toml`:
 
@@ -57,7 +62,7 @@ Do not read these symptoms as a model refusal, a prompt problem, or an authoriza
    ```
 
 2. Check the model catalog entry for the selected model. If it contains `"multi_agent_version": "v2"`, change it to `"v1"` or remove the key. A model catalog setting overrides the collaboration default and can keep V2 active after the feature flag is cleared.
-3. Precedence is: feature flag, then model catalog entry, then the collaboration default of V1. Check all three when the first change has no effect.
+3. Resolution order is: an enabled feature flag forces V2; otherwise the selected model's catalog entry decides; otherwise the collaboration default is V1. Check all three when the first change has no effect.
 4. Restart Codex, then rerun the probe from `templates/delegation-probe.md`. A restart without a probe is not a fix; the failure mode produces no error.
 
 `fork_turns: "all"` is a temporary detour for real work, and it is never acceptable for the probe. A probe must run with `fork_turns: "none"`: with `all`, the V2 default, the child inherits the parent thread, including the spawn arguments that contain the probe token, so it can write the expected file without any delivery. Inheritance also does not repair the encoding path or make later messages readable.
@@ -68,12 +73,16 @@ If a managed configuration pins V2 and cannot be edited, use a Codex build that 
 
 ## What the skill does about it
 
-A failed probe sets `delegation_available: false`. The skill then runs the single-agent path with a separate verification pass, and the contract records the failing stage and the measured values. This is the normal fallback, not a special case for Codex.
+`scripts/host_preflight.py` reads the active model, provider, catalog, and latest session without changing configuration. When it returns `single_agent`, the skill does not spawn at all: it records `delegation_available: false`, `detection.method: "host preflight"`, `detection.result: "unavailable"`, the preflight reason, and runs the single-agent path with a separate verification pass. When it returns `v1` or `v2_probe`, the normal round-trip probe still decides whether delegation is available. When the running session and the config disagree, the preflight reports `config_mismatch`; `restart_required` is used only when the running session is V2 and the config now selects V1.
+
+On a non-OpenAI V2 host, `single_agent` is the default. A host owner who wants to test a new Codex build can run `python scripts/host_preflight.py --probe` and then the V2 probe; a passing probe is evidence for that build only.
+
+A failed probe also sets `delegation_available: false` and uses the same fallback. This is the normal host-adaptation path, not a special case for Codex.
 
 Do not mark delegation available because the tools exist, because a spawn returned a task name or agent id, or because a child produced a plausible-looking reply. Only a file written by the child, bound to a token the child had to receive, and read back by the coordinator counts. The probe must run with history inheritance disabled.
 
 ## Limits
 
-- Based on the `openai/codex` main source, the V1 tool surface observed locally, and the V2 tool surface reported from another machine. Not reproduced end to end on that machine.
+- Based on the `openai/codex` source at `rust-v0.163.0-alpha.10.2` and `main`, the V1 tool surface observed locally, and the V2 failure reported from a second machine (Codex `0.163.0-alpha.10.2`, custom DeepSeek provider, model catalog `multi_agent_version: v2`). The failure was not reproduced with a packet capture.
 - The source locations and the default version may change in later builds. Recheck the tool signatures before trusting this document.
 - This adapter is unofficial. It is not a Codex endorsement, and it does not describe any private or undocumented provider behavior beyond the delivery path above.
